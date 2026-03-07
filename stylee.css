@@ -662,3 +662,63 @@ td.actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .type-spices     { background: rgba(167,139,250,0.12); color: #a78bfa; }
 .type-drinks     { background: rgba(34,211,238,0.12); color: #22d3ee; }
 .type-other      { background: rgba(148,163,184,0.12); color: #94a3b8; }
+
+/* Wishlist category badges */
+.type-electronics { background: rgba(59,130,246,0.12); color: #60a5fa; }
+.type-clothes     { background: rgba(236,72,153,0.12); color: #f472b6; }
+.type-books       { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.type-shoes       { background: rgba(251,191,36,0.12); color: #fbbf24; }
+.type-beauty      { background: rgba(167,139,250,0.12); color: #c4b5fd; }
+.type-home        { background: rgba(16,185,129,0.12); color: #34d399; }
+.type-sports      { background: rgba(239,68,68,0.12); color: #f87171; }
+
+/* Movie type badges */
+.type-movie      { background: rgba(99,102,241,0.12); color: #818cf8; }
+.type-series     { background: rgba(236,72,153,0.12); color: #f472b6; }
+.type-documentary{ background: rgba(245,158,11,0.12); color: #f59e0b; }
+.type-anime      { background: rgba(34,211,238,0.12); color: #22d3ee; }
+.type-short-film { background: rgba(148,163,184,0.12); color: #94a3b8; }
+
+/* Genre badges */
+.type-action    { background: rgba(239,68,68,0.12); color: #f87171; }
+.type-comedy    { background: rgba(251,191,36,0.12); color: #fbbf24; }
+.type-drama     { background: rgba(167,139,250,0.12); color: #a78bfa; }
+.type-horror    { background: rgba(107,33,168,0.12); color: #c084fc; }
+.type-sci-fi    { background: rgba(34,211,238,0.12); color: #22d3ee; }
+.type-romance   { background: rgba(236,72,153,0.12); color: #f472b6; }
+.type-thriller  { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.type-fantasy   { background: rgba(99,102,241,0.12); color: #818cf8; }
+.type-animation { background: rgba(16,185,129,0.12); color: #34d399; }
+
+/* Event type badges */
+.type-birthday { background: rgba(236,72,153,0.12); color: #f472b6; }
+.type-concert  { background: rgba(167,139,250,0.12); color: #a78bfa; }
+.type-show     { background: rgba(251,191,36,0.12); color: #fbbf24; }
+.type-wedding  { background: rgba(34,211,238,0.12); color: #22d3ee; }
+.type-party    { background: rgba(239,68,68,0.12); color: #f87171; }
+.type-trip     { background: rgba(16,185,129,0.12); color: #34d399; }
+.type-meeting  { background: rgba(59,130,246,0.12); color: #60a5fa; }
+
+/* Health type badges */
+.type-appointment        { background: rgba(59,130,246,0.12); color: #60a5fa; }
+.type-medication         { background: rgba(16,185,129,0.12); color: #34d399; }
+.type-test-\/-analysis   { background: rgba(245,158,11,0.12); color: #f59e0b; }
+.type-surgery            { background: rgba(239,68,68,0.12); color: #f87171; }
+
+/* Status badges for new categories */
+.status-want-to-watch  { background: rgba(148,163,184,0.15); color: #94a3b8; }
+.status-watching       { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.status-watched        { background: rgba(16,185,129,0.15); color: #10b981; }
+.status-dropped        { background: rgba(239,68,68,0.15); color: #ef4444; }
+.status-upcoming       { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.status-confirmed      { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.status-attended       { background: rgba(16,185,129,0.15); color: #10b981; }
+.status-missed         { background: rgba(239,68,68,0.15); color: #ef4444; }
+.status-recurring      { background: rgba(167,139,250,0.15); color: #a78bfa; }
+.status-high           { background: rgba(239,68,68,0.15); color: #ef4444; }
+.status-medium         { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.status-low            { background: rgba(16,185,129,0.15); color: #10b981; }
+.status-in-progress    { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.status-appointment    { background: rgba(59,130,246,0.15); color: #60a5fa; }
+.status-medication     { background: rgba(16,185,129,0.15); color: #34d399; }
+.status-surgery        { background: rgba(239,68,68,0.15); color: #f87171; }

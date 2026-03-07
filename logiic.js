@@ -1,11 +1,20 @@
+// ═══════════════════════════════════════════════
+//  SMART LIFE ORGANIZER — app.js
+// ═══════════════════════════════════════════════
+
 var STORAGE_KEY = 'slo_v2';
 
 var BUILT_IN_CATEGORIES = [
-  { id: 'school',   name: 'School',   icon: '🎓', builtIn: true },
-  { id: 'shopping', name: 'Shopping', icon: '🛍️', builtIn: true },
-  { id: 'food',     name: 'Food',     icon: '🍽️', builtIn: true },
-  { id: 'gym',      name: 'Gym',      icon: '💪', builtIn: true },
-  { id: 'travel',   name: 'Travel',   icon: '✈️', builtIn: true },
+  { id: 'school',   name: 'School',        icon: '🎓', builtIn: true },
+  { id: 'shopping', name: 'Shopping',      icon: '🛍️', builtIn: true },
+  { id: 'food',     name: 'Food',          icon: '🍽️', builtIn: true },
+  { id: 'gym',      name: 'Gym',           icon: '💪', builtIn: true },
+  { id: 'travel',   name: 'Travel',        icon: '✈️', builtIn: true },
+  { id: 'wishlist', name: 'Wishlist',      icon: '⭐', builtIn: true },
+  { id: 'health',   name: 'Health',        icon: '🏥', builtIn: true },
+  { id: 'movies',   name: 'Movies/Series', icon: '🎬', builtIn: true },
+  { id: 'events',   name: 'Events',        icon: '🎉', builtIn: true },
+  { id: 'work',     name: 'Work',          icon: '💼', builtIn: true },
 ];
 
 var INGREDIENT_TYPES = ['Vegetables','Fruits','Dairy','Meat','Grains','Spices','Drinks','Other'];
@@ -113,6 +122,127 @@ var SCHEMAS = {
         options: ['Planning','Booked','In Progress','Completed','Cancelled'] },
       { key: 'notes',       label: 'Notes',        type: 'textarea', placeholder: 'Optional notes...' },
     ],
+  },
+
+  wishlist: {
+    addLabel: 'Add Item',
+    columns: [
+      { key: 'itemName',  label: 'Item Name' },
+      { key: 'category',  label: 'Category', type: 'badge' },
+      { key: 'price',     label: 'Est. Price (MAD)', type: 'price' },
+      { key: 'priority',  label: 'Priority', type: 'status' },
+      { key: 'link',      label: 'Link', type: 'link' },
+      { key: 'notes',     label: 'Notes' },
+    ],
+    fields: [
+      { key: 'itemName',  label: 'Item Name', type: 'text', required: true, placeholder: 'e.g. AirPods Pro' },
+      { key: 'category',  label: 'Category',  type: 'select', required: true,
+        options: ['Electronics','Clothes','Books','Shoes','Beauty','Home','Sports','Other'] },
+      { key: 'price',     label: 'Est. Price (MAD)', type: 'number', placeholder: '0.00' },
+      { key: 'priority',  label: 'Priority',  type: 'select',
+        options: ['High','Medium','Low'] },
+      { key: 'link',      label: 'Link (optional)',  type: 'text', placeholder: 'https://...' },
+      { key: 'notes',     label: 'Notes',     type: 'textarea', placeholder: 'Optional notes...' },
+    ],
+    hasTotals: true,
+    totalsKey: 'category',
+    totalsLabel: 'Wishlist',
+  },
+
+  health: {
+    addLabel: 'Add Entry',
+    columns: [
+      { key: 'type',        label: 'Type', type: 'status' },
+      { key: 'name',        label: 'Name / Doctor / Medication' },
+      { key: 'date',        label: 'Date' },
+      { key: 'time',        label: 'Time' },
+      { key: 'dosage',      label: 'Dosage / Location' },
+      { key: 'status',      label: 'Status', type: 'status' },
+      { key: 'notes',       label: 'Notes' },
+    ],
+    fields: [
+      { key: 'type', label: 'Type', type: 'select', required: true,
+        options: ['Appointment','Medication','Test / Analysis','Surgery','Other'] },
+      { key: 'name', label: 'Name / Doctor / Medication', type: 'text', required: true,
+        placeholder: 'e.g. Dr. Ahmed – Dentist' },
+      { key: 'date',   label: 'Date',             type: 'date' },
+      { key: 'time',   label: 'Time',             type: 'text', placeholder: 'e.g. 10:30 AM' },
+      { key: 'dosage', label: 'Dosage / Location',type: 'text', placeholder: 'e.g. 500mg twice/day or Clinic name' },
+      { key: 'status', label: 'Status',           type: 'select',
+        options: ['Upcoming','Completed','Cancelled','Recurring'] },
+      { key: 'notes',  label: 'Notes',            type: 'textarea', placeholder: 'Optional notes...' },
+    ],
+  },
+
+  movies: {
+    addLabel: 'Add Title',
+    columns: [
+      { key: 'title',  label: 'Title' },
+      { key: 'type',   label: 'Type', type: 'badge' },
+      { key: 'genre',  label: 'Genre', type: 'badge' },
+      { key: 'status', label: 'Status', type: 'status' },
+      { key: 'rating', label: 'Rating' },
+      { key: 'notes',  label: 'Notes' },
+    ],
+    fields: [
+      { key: 'title',  label: 'Title',  type: 'text', required: true, placeholder: 'e.g. Inception' },
+      { key: 'type',   label: 'Type',   type: 'select', required: true,
+        options: ['Movie','Series','Documentary','Anime','Short Film'] },
+      { key: 'genre',  label: 'Genre',  type: 'select',
+        options: ['Action','Comedy','Drama','Horror','Sci-Fi','Romance','Thriller','Fantasy','Animation','Other'] },
+      { key: 'status', label: 'Status', type: 'select',
+        options: ['Want to Watch','Watching','Watched','Dropped'] },
+      { key: 'rating', label: 'Rating (1-10)', type: 'text', placeholder: 'e.g. 9/10' },
+      { key: 'notes',  label: 'Notes',  type: 'textarea', placeholder: 'Thoughts, where to watch...' },
+    ],
+    hasFilter: true,
+    filterKey: 'status',
+    filterType: 'select_filter',
+    filterOptions: ['Want to Watch','Watching','Watched','Dropped'],
+  },
+
+  events: {
+    addLabel: 'Add Event',
+    columns: [
+      { key: 'eventName', label: 'Event Name' },
+      { key: 'type',      label: 'Type', type: 'badge' },
+      { key: 'date',      label: 'Date' },
+      { key: 'time',      label: 'Time' },
+      { key: 'location',  label: 'Location' },
+      { key: 'status',    label: 'Status', type: 'status' },
+      { key: 'notes',     label: 'Notes' },
+    ],
+    fields: [
+      { key: 'eventName', label: 'Event Name', type: 'text', required: true, placeholder: "e.g. Sara's Birthday" },
+      { key: 'type',      label: 'Type',       type: 'select', required: true,
+        options: ['Birthday','Concert','Show','Wedding','Sports','Trip','Party','Meeting','Other'] },
+      { key: 'date',      label: 'Date',       type: 'date' },
+      { key: 'time',      label: 'Time',       type: 'text', placeholder: 'e.g. 7:00 PM' },
+      { key: 'location',  label: 'Location',   type: 'text', placeholder: 'e.g. Casablanca' },
+      { key: 'status',    label: 'Status',     type: 'select',
+        options: ['Upcoming','Confirmed','Attended','Missed','Cancelled'] },
+      { key: 'notes',     label: 'Notes',      type: 'textarea', placeholder: 'Gift ideas, notes...' },
+    ],
+  },
+
+  work: {
+    addLabel: 'Log Work Day',
+    columns: [
+      { key: 'date',    label: 'Date' },
+      { key: 'day',     label: 'Day' },
+      { key: 'hours',   label: 'Hours Worked' },
+      { key: 'project', label: 'Task / Project' },
+      { key: 'notes',   label: 'Notes' },
+    ],
+    fields: [
+      { key: 'date',    label: 'Date',           type: 'date',   required: true },
+      { key: 'day',     label: 'Day of Week',    type: 'select', required: true,
+        options: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] },
+      { key: 'hours',   label: 'Hours Worked',   type: 'number', required: true, placeholder: 'e.g. 8' },
+      { key: 'project', label: 'Task / Project', type: 'text',   placeholder: 'e.g. Client report' },
+      { key: 'notes',   label: 'Notes',          type: 'textarea', placeholder: 'Optional notes...' },
+    ],
+    hasWorkSummary: true,
   },
 
   custom: {
@@ -303,18 +433,25 @@ function renderCategory(categoryId) {
         '<div class="table-wrapper"><div class="table-scroll" id="table-scroll">' +
           buildTable(cat, schema, getItems(categoryId), '', '') +
         '</div></div>' +
-        (schema.hasTotals ? '<div id="totals-panel">' + buildShoppingTotals(getItems(categoryId), '') + '</div>' : '') +
+        (schema.hasTotals ? '<div id="totals-panel">' + buildPriceTotals(schema, getItems(categoryId), '') + '</div>' : '') +
+        (schema.hasWorkSummary ? '<div id="work-panel">' + buildWorkSummary(getItems(categoryId)) + '</div>' : '') +
       '</div>' +
     '</div>';
 }
 
-function buildSearchBar(schema, categoryId) {
+function buildSearchBar(schema) {
   var html = '<input class="search-box" id="search-input" type="text" placeholder="Search..." ' +
     'oninput="filterTable()">';
   if (schema.hasFilter && schema.filterKey === 'category') {
     html += '<select class="filter-select" id="filter-select" onchange="filterTable()">' +
       '<option value="">All Categories</option>' +
       SHOPPING_CATS.map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join('') +
+      '</select>';
+  }
+  if (schema.hasFilter && schema.filterType === 'select_filter' && schema.filterOptions) {
+    html += '<select class="filter-select" id="filter-select" onchange="filterTable()">' +
+      '<option value="">All</option>' +
+      schema.filterOptions.map(function(o) { return '<option value="' + escapeAttr(o) + '">' + escapeHtml(o) + '</option>'; }).join('') +
       '</select>';
   }
   return html;
@@ -335,7 +472,11 @@ function filterTable() {
 
   if (schema.hasTotals) {
     var panel = document.getElementById('totals-panel');
-    if (panel) panel.innerHTML = buildShoppingTotals(items, filter);
+    if (panel) panel.innerHTML = buildPriceTotals(schema, items, filter);
+  }
+  if (schema.hasWorkSummary) {
+    var wPanel = document.getElementById('work-panel');
+    if (wPanel) wPanel.innerHTML = buildWorkSummary(items);
   }
 }
 
@@ -343,11 +484,13 @@ function buildTable(cat, schema, items, search, filter) {
   search = (search || '').toLowerCase();
   filter = filter || '';
 
+  var filterKey = schema.filterKey || 'category';
   var filtered = items.filter(function(item) {
     var matchSearch = !search || Object.values(item).some(function(v) {
       return String(v || '').toLowerCase().includes(search);
     });
-    var matchFilter = !filter || item.category === filter || item.ingredientType === filter;
+    var matchFilter = !filter || String(item[filterKey] || '') === filter ||
+      item.category === filter || item.ingredientType === filter || item.status === filter;
     return matchSearch && matchFilter;
   });
 
@@ -394,30 +537,41 @@ function renderCell(col, item) {
     var statusClass = 'status-' + String(val || '').toLowerCase().replace(/\s+/g,'-');
     return val ? '<span class="status-badge ' + statusClass + '">' + escapeHtml(val) + '</span>' : '—';
   }
+  if (col.type === 'link') {
+    if (!val) return '—';
+    var href = val.startsWith('http') ? val : 'https://' + val;
+    return '<a href="' + escapeAttr(href) + '" target="_blank" rel="noopener" ' +
+      'style="color:#60a5fa;text-decoration:none;font-size:0.8rem;">🔗 Open</a>';
+  }
   return escapeHtml(String(val || '—'));
 }
 
 // ───────────────────────────────────────────────
-//  SHOPPING TOTALS
+//  PRICE TOTALS (Shopping + Wishlist)
 // ───────────────────────────────────────────────
 
-function buildShoppingTotals(items, filterCat) {
+function buildPriceTotals(schema, items, filterVal) {
   if (!items || items.length === 0) return '';
 
-  var byCategory = {};
+  var groupKey = schema.totalsKey || 'category';
+  var label    = schema.totalsLabel || 'Shopping';
+
+  var byGroup = {};
   items.forEach(function(item) {
-    var cat = item.category || 'Other';
-    if (!byCategory[cat]) byCategory[cat] = 0;
-    byCategory[cat] += parseFloat(item.price || 0);
+    var grp = item[groupKey] || 'Other';
+    if (!byGroup[grp]) byGroup[grp] = 0;
+    byGroup[grp] += parseFloat(item.price || 0);
   });
 
-  var filteredItems = filterCat ? items.filter(function(i) { return i.category === filterCat; }) : items;
+  var filteredItems = filterVal
+    ? items.filter(function(i) { return i[groupKey] === filterVal; })
+    : items;
   var grandTotal = filteredItems.reduce(function(sum, i) { return sum + parseFloat(i.price || 0); }, 0);
 
-  var chipsHtml = Object.keys(byCategory).map(function(cat) {
+  var chipsHtml = Object.keys(byGroup).map(function(grp) {
     return '<div class="total-chip">' +
-      '<div class="total-chip-label">' + escapeHtml(cat) + '</div>' +
-      '<div class="total-chip-value">' + byCategory[cat].toFixed(2) + ' MAD</div>' +
+      '<div class="total-chip-label">' + escapeHtml(grp) + '</div>' +
+      '<div class="total-chip-value">' + byGroup[grp].toFixed(2) + ' MAD</div>' +
       '</div>';
   }).join('');
 
@@ -425,9 +579,51 @@ function buildShoppingTotals(items, filterCat) {
     '<div class="summary-title">💰 Totals by Category</div>' +
     '<div class="totals-grid">' + chipsHtml + '</div>' +
     '<div class="grand-total">' +
-      '<span>Total' + (filterCat ? ' (' + filterCat + ')' : ' Shopping') + '</span>' +
+      '<span>Total' + (filterVal ? ' (' + filterVal + ')' : ' ' + label) + '</span>' +
       '<span class="grand-total-value">' + grandTotal.toFixed(2) + ' MAD</span>' +
     '</div>' +
+  '</div>';
+}
+
+// ───────────────────────────────────────────────
+//  WORK SUMMARY
+// ───────────────────────────────────────────────
+
+function buildWorkSummary(items) {
+  if (!items || items.length === 0) return '';
+
+  var totalHours = items.reduce(function(sum, i) { return sum + parseFloat(i.hours || 0); }, 0);
+  var totalDays  = items.length;
+  var avgHours   = totalDays > 0 ? (totalHours / totalDays).toFixed(1) : 0;
+
+  var byDay = {};
+  ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(function(d) {
+    byDay[d] = 0;
+  });
+  items.forEach(function(item) {
+    var d = item.day || 'Other';
+    if (!byDay[d]) byDay[d] = 0;
+    byDay[d] += parseFloat(item.hours || 0);
+  });
+
+  var dayChips = Object.keys(byDay).filter(function(d) { return byDay[d] > 0; }).map(function(d) {
+    return '<div class="total-chip">' +
+      '<div class="total-chip-label">' + d + '</div>' +
+      '<div class="total-chip-value">' + byDay[d].toFixed(1) + 'h</div>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="summary-panel">' +
+    '<div class="summary-title">💼 Work Summary</div>' +
+    '<div class="totals-grid">' +
+      '<div class="total-chip"><div class="total-chip-label">Total Hours</div>' +
+        '<div class="total-chip-value">' + totalHours.toFixed(1) + 'h</div></div>' +
+      '<div class="total-chip"><div class="total-chip-label">Days Logged</div>' +
+        '<div class="total-chip-value">' + totalDays + '</div></div>' +
+      '<div class="total-chip"><div class="total-chip-label">Avg per Day</div>' +
+        '<div class="total-chip-value">' + avgHours + 'h</div></div>' +
+    '</div>' +
+    (dayChips ? '<div class="summary-title" style="margin-top:1rem">Hours by Day of Week</div><div class="totals-grid">' + dayChips + '</div>' : '') +
   '</div>';
 }
 
