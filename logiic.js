@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════
-//  SMART LIFE ORGANIZER — app.js
-// ═══════════════════════════════════════════════
-
 var STORAGE_KEY = 'slo_v2';
 
 var BUILT_IN_CATEGORIES = [
@@ -260,10 +256,6 @@ var SCHEMAS = {
   },
 };
 
-// ───────────────────────────────────────────────
-//  STATE
-// ───────────────────────────────────────────────
-
 var state = {
   selectedCategoryId: null,
   currentCategoryId: null,
@@ -303,10 +295,6 @@ function getSchema(category) {
   return SCHEMAS.custom;
 }
 
-// ───────────────────────────────────────────────
-//  NAVIGATION
-// ───────────────────────────────────────────────
-
 function showHome() {
   state.currentCategoryId = null;
   document.getElementById('page-home').classList.remove('hidden');
@@ -324,10 +312,6 @@ function showCategory(categoryId) {
 function openSelectedCategory() {
   if (state.selectedCategoryId) showCategory(state.selectedCategoryId);
 }
-
-// ───────────────────────────────────────────────
-//  HOME PAGE
-// ───────────────────────────────────────────────
 
 function renderHome() {
   var categories = getCategories();
@@ -406,10 +390,6 @@ function submitNewCategory() {
   closeModal();
   renderHome();
 }
-
-// ───────────────────────────────────────────────
-//  CATEGORY PAGE
-// ───────────────────────────────────────────────
 
 function renderCategory(categoryId) {
   var categories = getCategories();
@@ -546,10 +526,6 @@ function renderCell(col, item) {
   return escapeHtml(String(val || '—'));
 }
 
-// ───────────────────────────────────────────────
-//  PRICE TOTALS (Shopping + Wishlist)
-// ───────────────────────────────────────────────
-
 function buildPriceTotals(schema, items, filterVal) {
   if (!items || items.length === 0) return '';
 
@@ -584,10 +560,6 @@ function buildPriceTotals(schema, items, filterVal) {
     '</div>' +
   '</div>';
 }
-
-// ───────────────────────────────────────────────
-//  WORK SUMMARY
-// ───────────────────────────────────────────────
 
 function buildWorkSummary(items) {
   if (!items || items.length === 0) return '';
@@ -626,10 +598,6 @@ function buildWorkSummary(items) {
     (dayChips ? '<div class="summary-title" style="margin-top:1rem">Hours by Day of Week</div><div class="totals-grid">' + dayChips + '</div>' : '') +
   '</div>';
 }
-
-// ───────────────────────────────────────────────
-//  GROCERY LIST (Food)
-// ───────────────────────────────────────────────
 
 function showGroceryList() {
   var items = getItems('food');
@@ -683,10 +651,6 @@ function showGroceryList() {
       : '')
   );
 }
-
-// ───────────────────────────────────────────────
-//  ADD / EDIT ITEM MODAL
-// ───────────────────────────────────────────────
 
 function showAddItemModal() {
   state.editingItemId = null;
@@ -845,10 +809,6 @@ function deleteItem(itemId) {
   renderCategory(state.currentCategoryId);
 }
 
-// ───────────────────────────────────────────────
-//  IMAGE COMPRESSION
-// ───────────────────────────────────────────────
-
 function compressImage(file, maxWidth, quality, callback) {
   var reader = new FileReader();
   reader.onload = function(e) {
@@ -867,10 +827,6 @@ function compressImage(file, maxWidth, quality, callback) {
   reader.readAsDataURL(file);
 }
 
-// ───────────────────────────────────────────────
-//  MODAL SYSTEM
-// ───────────────────────────────────────────────
-
 function showModal(html) {
   document.getElementById('modal-content').innerHTML = html;
   document.getElementById('modal-overlay').classList.remove('hidden');
@@ -886,10 +842,6 @@ function handleOverlayClick(e) {
   if (e.target === document.getElementById('modal-overlay')) closeModal();
 }
 
-// ───────────────────────────────────────────────
-//  UTILITIES
-// ───────────────────────────────────────────────
-
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g,'&amp;')
@@ -901,10 +853,6 @@ function escapeHtml(str) {
 function escapeAttr(str) {
   return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
-
-// ───────────────────────────────────────────────
-//  INIT
-// ───────────────────────────────────────────────
 
 function init() {
   var data = getData();
