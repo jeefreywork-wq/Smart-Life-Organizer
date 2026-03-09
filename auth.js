@@ -2,147 +2,146 @@ var SUPABASE_URL = 'https://prfpzurgbtudxazyssnu.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_Ts5UJQ9P8oxWfqUf1dJHeA_IjGai9na';
 var TABLE_NAME   = 'slo_data';
 var SESSION_KEY  = 'slo_session';
-function storeSession(data) {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch(e) {}
-}
+var CACHE_KEY    = 'slo_cache';
 
-function loadSession() {
-  try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) { return null; }
-}
+function storeSession(s) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch(e) {} }
+function loadSession()   { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) { return null; } }
+function clearSession()  { try { localStorage.removeItem(SESSION_KEY); } catch(e) {} }
 
-function clearSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch(e) {}
-}
+function storeCacheLocal(d) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch(e) {} }
+function loadCacheLocal()   { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; } catch(e) { return {}; } }
+function clearCacheLocal()  { try { localStorage.removeItem(CACHE_KEY); } catch(e) {} }
 
 var sb = {
   session: null,
 
-  _headers: function() {
-    var token = (sb.session && sb.session.access_token) ? sb.session.access_token : SUPABASE_KEY;
-    return {
-      'Content-Type': 'application/json',
-      'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + token
-    };
-  },
-
-  signUp: async function(email, password) {
-    var r = await fetch(SUPABASE_URL + '/auth/v1/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ email: email, password: password })
-    });
-    var data = await r.json();
-    if (data.access_token && data.user) {
-      sb.session = { access_token: data.access_token, refresh_token: data.refresh_token, user: { id: data.user.id, email: data.user.email } };
-      storeSession(sb.session);
-    }
-    return data;
+  _h: function() {
+    var token = sb.session ? sb.session.access_token : SUPABASE_KEY;
+    return { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token };
   },
 
   signIn: async function(email, password) {
     var r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ email: email, password: password })
+      body: JSON.stringify({ email, password })
     });
-    var data = await r.json();
-    if (data.access_token && data.user) {
-      sb.session = { access_token: data.access_token, refresh_token: data.refresh_token, user: { id: data.user.id, email: data.user.email } };
+    var d = await r.json();
+    if (d.access_token) {
+      sb.session = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: d.user.id, email: d.user.email } };
       storeSession(sb.session);
     }
-    return data;
+    return d;
   },
 
-  refreshSession: async function(refreshToken) {
+  signUp: async function(email, password) {
+    var r = await fetch(SUPABASE_URL + '/auth/v1/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+      body: JSON.stringify({ email, password })
+    });
+    var d = await r.json();
+    if (d.access_token) {
+      sb.session = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: d.user.id, email: d.user.email } };
+      storeSession(sb.session);
+    }
+    return d;
+  },
+
+  refresh: async function(refresh_token) {
     var r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ refresh_token: refreshToken })
+      body: JSON.stringify({ refresh_token })
     });
-    var data = await r.json();
-    if (data.access_token && data.user) {
-      sb.session = { access_token: data.access_token, refresh_token: data.refresh_token, user: { id: data.user.id, email: data.user.email } };
+    var d = await r.json();
+    if (d.access_token) {
+      sb.session = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: d.user.id, email: d.user.email } };
       storeSession(sb.session);
-      return sb.session;
+      return true;
     }
-    return null;
+    return false;
   },
 
   restoreSession: async function() {
-    var stored = loadSession();
-    if (!stored || !stored.access_token) return null;
+    var s = loadSession();
+    if (!s) return false;
     try {
       var r = await fetch(SUPABASE_URL + '/auth/v1/user', {
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + stored.access_token }
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + s.access_token }
       });
       if (r.ok) {
-        var user = await r.json();
-        sb.session = { access_token: stored.access_token, refresh_token: stored.refresh_token, user: { id: user.id, email: user.email } };
+        var u = await r.json();
+        sb.session = { access_token: s.access_token, refresh_token: s.refresh_token, user: { id: u.id, email: u.email } };
         storeSession(sb.session);
-        return sb.session;
+        return true;
       }
     } catch(e) {}
-    if (stored.refresh_token) {
-      return await sb.refreshSession(stored.refresh_token);
-    }
+    if (s.refresh_token) return await sb.refresh(s.refresh_token);
     clearSession();
-    return null;
+    return false;
   },
 
   signOut: async function() {
-    if (sb.session && sb.session.access_token) {
-      try {
-        await fetch(SUPABASE_URL + '/auth/v1/logout', {
-          method: 'POST',
-          headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + sb.session.access_token }
-        });
-      } catch(e) {}
-    }
+    try {
+      if (sb.session) await fetch(SUPABASE_URL + '/auth/v1/logout', {
+        method: 'POST', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + sb.session.access_token }
+      });
+    } catch(e) {}
     sb.session = null;
     clearSession();
+    clearCacheLocal();
   },
 
   fetchData: async function() {
-    if (!sb.session) return {};
+    if (!sb.session) return null;
     var r = await fetch(
       SUPABASE_URL + '/rest/v1/' + TABLE_NAME + '?user_id=eq.' + sb.session.user.id + '&select=data',
-      { headers: sb._headers() }
+      { headers: sb._h() }
     );
-    if (!r.ok) return {};
+    if (!r.ok) { console.error('fetchData failed', r.status, await r.text()); return null; }
     var rows = await r.json();
-    if (Array.isArray(rows) && rows.length > 0) return rows[0].data || {};
-    return {};
+    return (Array.isArray(rows) && rows.length > 0) ? (rows[0].data || {}) : {};
   },
 
-  saveData: async function(dataObj) {
-    if (!sb.session) return;
-    var body = { user_id: sb.session.user.id, data: dataObj, updated_at: new Date().toISOString() };
-    await fetch(SUPABASE_URL + '/rest/v1/' + TABLE_NAME, {
+  writeData: async function(dataObj) {
+    if (!sb.session) return false;
+    var body = JSON.stringify({ user_id: sb.session.user.id, data: dataObj, updated_at: new Date().toISOString() });
+    var r = await fetch(SUPABASE_URL + '/rest/v1/' + TABLE_NAME, {
       method: 'POST',
-      headers: Object.assign({}, sb._headers(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-      body: JSON.stringify(body)
+      headers: Object.assign({}, sb._h(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: body
     });
+    if (!r.ok) {
+      var txt = await r.text();
+      console.error('writeData failed', r.status, txt);
+      return false;
+    }
+    return true;
   }
 };
 
-var _memCache = {};
+var _mem = {};
 var _saveTimer = null;
 
 function getData() {
-  return _memCache;
+  return _mem;
 }
 
 function saveData(data) {
-  _memCache = data;
+  _mem = data;
+
+  storeCacheLocal(data);
+
   clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(function() {
-    sb.saveData(data).catch(function(e) { console.error('Sync error:', e); });
-  }, 800);
+  _saveTimer = setTimeout(async function() {
+    var ok = await sb.writeData(data).catch(function(e) { console.error('writeData error', e); return false; });
+    if (!ok) console.warn('Remote save failed — data is safe in localStorage backup.');
+  }, 600);
 }
 
 function switchTab(tab) {
-  var isLogin = (tab === 'login');
+  var isLogin = tab === 'login';
   document.getElementById('tab-login').classList.toggle('active', isLogin);
   document.getElementById('tab-signup').classList.toggle('active', !isLogin);
   document.getElementById('form-login').classList.toggle('hidden', !isLogin);
@@ -151,7 +150,7 @@ function switchTab(tab) {
 }
 
 function clearAuthMessages() {
-  ['login-error', 'signup-error', 'signup-success'].forEach(function(id) {
+  ['login-error','signup-error','signup-success'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) { el.textContent = ''; el.classList.add('hidden'); }
   });
@@ -159,93 +158,90 @@ function clearAuthMessages() {
 
 function showAuthError(id, msg) {
   var el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = msg;
-  el.classList.remove('hidden');
+  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
 }
 
 function showAuthSuccess(id, msg) {
   var el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = msg;
-  el.classList.remove('hidden');
+  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
 }
 
-function setLoading(btnId, loading) {
+function setLoading(btnId, on) {
   var btn = document.getElementById(btnId);
   if (!btn) return;
-  var text = btn.querySelector('.btn-text');
-  var ldr  = btn.querySelector('.btn-loader');
-  btn.disabled = loading;
-  if (text) text.style.opacity = loading ? '0.5' : '1';
-  if (ldr)  ldr.classList.toggle('hidden', !loading);
+  btn.disabled = on;
+  var t = btn.querySelector('.btn-text'), l = btn.querySelector('.btn-loader');
+  if (t) t.style.opacity = on ? '0.5' : '1';
+  if (l) l.classList.toggle('hidden', !on);
 }
 
 function togglePassword(inputId, btn) {
-  var input = document.getElementById(inputId);
-  if (!input) return;
-  if (input.type === 'password') { input.type = 'text';     btn.textContent = '🙈'; }
-  else                           { input.type = 'password'; btn.textContent = '👁'; }
+  var el = document.getElementById(inputId);
+  if (!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
+  btn.textContent = el.type === 'password' ? '👁' : '🙈';
 }
 
 async function handleLogin() {
   clearAuthMessages();
-  var email    = (document.getElementById('login-email').value    || '').trim();
-  var password = (document.getElementById('login-password').value || '');
-  if (!email || !password) { showAuthError('login-error', 'Please fill in all fields.'); return; }
-
+  var email = (document.getElementById('login-email').value || '').trim();
+  var pw    = document.getElementById('login-password').value || '';
+  if (!email || !pw) { showAuthError('login-error', 'Please fill in all fields.'); return; }
   setLoading('login-btn', true);
   try {
-    var data = await sb.signIn(email, password);
-    if (data.error_description || data.error || (!data.access_token && data.msg)) {
-      showAuthError('login-error', data.error_description || data.msg || 'Login failed. Check your credentials.');
+    var d = await sb.signIn(email, pw);
+    if (!d.access_token) {
+      showAuthError('login-error', d.error_description || d.msg || 'Login failed. Check your credentials.');
     } else {
       await enterApp();
     }
-  } catch(e) {
-    showAuthError('login-error', 'Network error. Please try again.');
-  }
+  } catch(e) { showAuthError('login-error', 'Network error. Please try again.'); }
   setLoading('login-btn', false);
 }
 
 async function handleSignup() {
   clearAuthMessages();
-  var email    = (document.getElementById('signup-email').value    || '').trim();
-  var password = (document.getElementById('signup-password').value || '');
-  var confirm  = (document.getElementById('signup-confirm').value  || '');
-  if (!email || !password || !confirm) { showAuthError('signup-error', 'Please fill in all fields.'); return; }
-  if (password.length < 6)             { showAuthError('signup-error', 'Password must be at least 6 characters.'); return; }
-  if (password !== confirm)            { showAuthError('signup-error', 'Passwords do not match.'); return; }
-
+  var email = (document.getElementById('signup-email').value    || '').trim();
+  var pw    = document.getElementById('signup-password').value  || '';
+  var pw2   = document.getElementById('signup-confirm').value   || '';
+  if (!email || !pw || !pw2)  { showAuthError('signup-error', 'Please fill in all fields.'); return; }
+  if (pw.length < 6)          { showAuthError('signup-error', 'Password must be at least 6 characters.'); return; }
+  if (pw !== pw2)             { showAuthError('signup-error', 'Passwords do not match.'); return; }
   setLoading('signup-btn', true);
   try {
-    var data = await sb.signUp(email, password);
-    if (data.error_description || data.error) {
-      showAuthError('signup-error', data.error_description || data.msg || 'Sign up failed.');
+    var d = await sb.signUp(email, pw);
+    if (d.error || d.error_description) {
+      showAuthError('signup-error', d.error_description || d.msg || 'Sign up failed.');
     } else if (sb.session) {
       await enterApp();
     } else {
       showAuthSuccess('signup-success', '✅ Account created! Check your email to confirm, then sign in.');
       setTimeout(function() { switchTab('login'); }, 3000);
     }
-  } catch(e) {
-    showAuthError('signup-error', 'Network error. Please try again.');
-  }
+  } catch(e) { showAuthError('signup-error', 'Network error. Please try again.'); }
   setLoading('signup-btn', false);
 }
 
 async function handleSignOut() {
   await sb.signOut();
-  _memCache = {};
+  _mem = {};
   showPage('auth');
 }
 
 async function enterApp() {
   showLoadingScreen(true);
   try {
-    var remoteData = await sb.fetchData();
-    _memCache = (remoteData && typeof remoteData === 'object') ? remoteData : {};
-    if (!_memCache.customCategories) _memCache.customCategories = [];
+    var remote = await sb.fetchData();
+
+    if (remote !== null && typeof remote === 'object') {
+      _mem = remote;
+      storeCacheLocal(_mem);
+    } else {
+      console.warn('Supabase fetch failed, using local cache');
+      _mem = loadCacheLocal();
+    }
+
+    if (!_mem.customCategories) _mem.customCategories = [];
 
     var emailEl = document.getElementById('user-email-display');
     if (emailEl && sb.session) emailEl.textContent = sb.session.user.email;
@@ -253,8 +249,9 @@ async function enterApp() {
     showPage('home');
     renderHome();
   } catch(e) {
-    console.error('Error loading app data:', e);
-    _memCache = { customCategories: [] };
+    console.error('enterApp error:', e);
+    _mem = loadCacheLocal();
+    if (!_mem.customCategories) _mem.customCategories = [];
     showPage('home');
     renderHome();
   }
@@ -262,7 +259,7 @@ async function enterApp() {
 }
 
 function showPage(page) {
-  ['auth', 'home', 'category'].forEach(function(p) {
+  ['auth','home','category'].forEach(function(p) {
     var el = document.getElementById('page-' + p);
     if (el) el.classList.toggle('hidden', p !== page);
   });
@@ -273,7 +270,7 @@ function showLoadingScreen(show) {
   if (show && !_loadingEl) {
     _loadingEl = document.createElement('div');
     _loadingEl.className = 'loading-screen';
-    _loadingEl.innerHTML = '<div class="logo-mark">✦</div><p>Loading your data\u2026</p>';
+    _loadingEl.innerHTML = '<div class="logo-mark">\u2726</div><p>Loading your data\u2026</p>';
     document.body.appendChild(_loadingEl);
   } else if (!show && _loadingEl) {
     _loadingEl.remove();
@@ -283,19 +280,19 @@ function showLoadingScreen(show) {
 
 document.addEventListener('keydown', function(e) {
   if (e.key !== 'Enter') return;
-  var loginForm  = document.getElementById('form-login');
-  var signupForm = document.getElementById('form-signup');
-  if (loginForm  && !loginForm.classList.contains('hidden'))  handleLogin();
-  if (signupForm && !signupForm.classList.contains('hidden')) handleSignup();
+  var lf = document.getElementById('form-login');
+  var sf = document.getElementById('form-signup');
+  if (lf && !lf.classList.contains('hidden')) handleLogin();
+  if (sf && !sf.classList.contains('hidden')) handleSignup();
 });
 
-(async function() {
+window.addEventListener('load', async function() {
   showLoadingScreen(true);
-  var session = await sb.restoreSession();
-  if (session) {
+  var ok = await sb.restoreSession();
+  if (ok) {
     await enterApp();
   } else {
     showLoadingScreen(false);
     showPage('auth');
   }
-})();
+});
