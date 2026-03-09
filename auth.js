@@ -5,8 +5,8 @@ var SESSION_KEY  = 'slo_session';
 var CACHE_KEY    = 'slo_cache';
 
 var _session = null; 
-var _mem     = {};   
-var _dirty   = false; 
+var _mem     = {}; 
+var _dirty   = false;
 var _writeTimer = null;
 
 function _saveSession(s){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }catch(e){} }
@@ -70,7 +70,7 @@ function _applySession(d) {
 }
 
 async function _fetchRemote() {
-  if (!_session) return null;
+  if (!_session) { console.warn('[SLO] fetchRemote: no session'); return null; }
   try {
     var r = await fetch(
       SUPABASE_URL + '/rest/v1/' + TABLE +
@@ -78,16 +78,19 @@ async function _fetchRemote() {
       { headers: _authHdr() }
     );
     if (!r.ok) {
-      console.error('[SLO] fetchRemote HTTP', r.status, await r.text());
+      var txt = await r.text();
+      console.error('[SLO] fetchRemote HTTP', r.status, txt);
       return null;
     }
     var rows = await r.json();
+    console.log('[SLO] fetchRemote rows:', JSON.stringify(rows));
     if (Array.isArray(rows) && rows.length > 0) {
       return rows[0].data || {};
     }
-    return {};  
+    console.log('[SLO] fetchRemote: no row in DB yet');
+    return null;
   } catch(e) {
-    console.error('[SLO] fetchRemote error', e);
+    console.error('[SLO] fetchRemote exception:', e);
     return null;
   }
 }
@@ -126,7 +129,7 @@ function getData() {
 
 function saveData(data) {
   _mem = data;
-  _saveCache(data); 
+  _saveCache(data);
   _dirty = true;
 
   clearTimeout(_writeTimer);
@@ -169,14 +172,26 @@ async function _restoreSession() {
 async function enterApp() {
   showLoadingScreen(true);
 
+  var local  = _loadCache();
   var remote = await _fetchRemote();
-  if (remote !== null) {
-    console.log('[SLO] loaded from Supabase');
+
+  console.log('[SLO] local cache keys:', Object.keys(local));
+  console.log('[SLO] remote data keys:', remote !== null ? Object.keys(remote) : 'null (fetch failed)');
+
+  var localHasData  = local  && Object.keys(local).length  > 0;
+  var remoteHasData = remote && Object.keys(remote).length > 0;
+
+  if (remoteHasData) {
+    console.log('[SLO] using remote data');
     _mem = remote;
     _saveCache(_mem);
+  } else if (localHasData) {
+    console.log('[SLO] remote empty/failed, using local cache and re-uploading');
+    _mem = local;
+    _writeRemote(_mem);
   } else {
-    console.warn('[SLO] Supabase fetch failed — using local cache');
-    _mem = _loadCache();
+    console.log('[SLO] both empty, fresh start');
+    _mem = {};
   }
 
   if (!_mem.customCategories) _mem.customCategories = [];
