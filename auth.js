@@ -5,7 +5,7 @@ var SESSION_KEY  = 'slo_session';
 var CACHE_KEY    = 'slo_cache';
 
 var _session = null; 
-var _mem     = {}; 
+var _mem     = {};
 var _dirty   = false;
 var _writeTimer = null;
 
@@ -97,28 +97,49 @@ async function _fetchRemote() {
 
 async function _writeRemote(dataObj) {
   if (!_session) { console.warn('[SLO] writeRemote: no session'); return false; }
+  var uid  = _session.user.id;
+  var body = JSON.stringify({ data: dataObj, updated_at: new Date().toISOString() });
+
   try {
-    var body = JSON.stringify({
-      user_id:    _session.user.id,
-      data:       dataObj,
-      updated_at: new Date().toISOString()
-    });
-    var r = await fetch(SUPABASE_URL + '/rest/v1/' + TABLE, {
-      method:  'POST',
-      headers: Object.assign({}, _authHdr(), {
-        'Prefer': 'resolution=merge-duplicates,return=minimal'
-      }),
-      body: body
-    });
-    if (!r.ok) {
-      var txt = await r.text();
-      console.error('[SLO] writeRemote HTTP', r.status, txt);
-      return false;
+    var patch = await fetch(
+      SUPABASE_URL + '/rest/v1/' + TABLE + '?user_id=eq.' + uid,
+      {
+        method:  'PATCH',
+        headers: Object.assign({}, _authHdr(), { 'Prefer': 'return=minimal' }),
+        body:    body
+      }
+    );
+
+    if (patch.ok) {
+      var range = patch.headers.get('Content-Range') || '';
+      console.log('[SLO] PATCH status:', patch.status, 'Content-Range:', range);
+
+      if (range === '*/0' || range === '') {
+        console.log('[SLO] no existing row, doing INSERT');
+        var ins = await fetch(SUPABASE_URL + '/rest/v1/' + TABLE, {
+          method:  'POST',
+          headers: Object.assign({}, _authHdr(), { 'Prefer': 'return=minimal' }),
+          body:    JSON.stringify({ user_id: uid, data: dataObj, updated_at: new Date().toISOString() })
+        });
+        if (!ins.ok) {
+          var t = await ins.text();
+          console.error('[SLO] INSERT failed', ins.status, t);
+          return false;
+        }
+        console.log('[SLO] INSERT OK');
+        return true;
+      }
+
+      console.log('[SLO] PATCH OK (row updated)');
+      return true;
     }
-    console.log('[SLO] writeRemote OK');
-    return true;
+
+    var txt = await patch.text();
+    console.error('[SLO] PATCH failed', patch.status, txt);
+    return false;
+
   } catch(e) {
-    console.error('[SLO] writeRemote error', e);
+    console.error('[SLO] writeRemote exception:', e);
     return false;
   }
 }
@@ -130,15 +151,19 @@ function getData() {
 function saveData(data) {
   _mem = data;
   _saveCache(data);
-  _dirty = true;
 
   clearTimeout(_writeTimer);
   _writeTimer = setTimeout(function() {
-    _writeRemote(_mem).then(function(ok) {
-      if (ok) _dirty = false;
-    });
-  }, 500);
+    _writeRemote(_mem);
+  }, 800);
 }
+
+window.addEventListener('beforeunload', function() {
+  if (_writeTimer) {
+    clearTimeout(_writeTimer);
+    _writeRemote(_mem);
+  }
+});
 
 async function _restoreSession() {
   var stored = _loadSession();
