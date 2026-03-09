@@ -1,128 +1,124 @@
 var SUPABASE_URL = 'https://prfpzurgbtudxazyssnu.supabase.co';
 var SUPABASE_KEY = 'sb_publishable_Ts5UJQ9P8oxWfqUf1dJHeA_IjGai9na';
-var TABLE_NAME   = 'slo_data';
+var TABLE        = 'slo_data';
 var SESSION_KEY  = 'slo_session';
 var CACHE_KEY    = 'slo_cache';
 
-function storeSession(s) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch(e) {} }
-function loadSession()   { try { return JSON.parse(localStorage.getItem(SESSION_KEY)); } catch(e) { return null; } }
-function clearSession()  { try { localStorage.removeItem(SESSION_KEY); } catch(e) {} }
+var _session = null; 
+var _mem     = {};   
+var _dirty   = false; 
+var _writeTimer = null;
 
-function storeCacheLocal(d) { try { localStorage.setItem(CACHE_KEY, JSON.stringify(d)); } catch(e) {} }
-function loadCacheLocal()   { try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; } catch(e) { return {}; } }
-function clearCacheLocal()  { try { localStorage.removeItem(CACHE_KEY); } catch(e) {} }
+function _saveSession(s){ try{ localStorage.setItem(SESSION_KEY, JSON.stringify(s)); }catch(e){} }
+function _loadSession() { try{ return JSON.parse(localStorage.getItem(SESSION_KEY)); }catch(e){ return null; } }
+function _dropSession() { try{ localStorage.removeItem(SESSION_KEY); }catch(e){} }
 
-var sb = {
-  session: null,
+function _saveCache(d) { try{ localStorage.setItem(CACHE_KEY, JSON.stringify(d)); }catch(e){} }
+function _loadCache()  { try{ return JSON.parse(localStorage.getItem(CACHE_KEY)) || {}; }catch(e){ return {}; } }
+function _dropCache()  { try{ localStorage.removeItem(CACHE_KEY); }catch(e){} }
 
-  _h: function() {
-    var token = sb.session ? sb.session.access_token : SUPABASE_KEY;
-    return { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token };
-  },
+function _authHdr(token){
+  return {
+    'Content-Type':  'application/json',
+    'apikey':        SUPABASE_KEY,
+    'Authorization': 'Bearer ' + (token || ((_session && _session.access_token) || SUPABASE_KEY))
+  };
+}
 
-  signIn: async function(email, password) {
-    var r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ email, password })
-    });
-    var d = await r.json();
-    if (d.access_token) {
-      sb.session = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: d.user.id, email: d.user.email } };
-      storeSession(sb.session);
-    }
-    return d;
-  },
+async function _signIn(email, password) {
+  var r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify({ email: email, password: password })
+  });
+  return r.json();
+}
 
-  signUp: async function(email, password) {
-    var r = await fetch(SUPABASE_URL + '/auth/v1/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ email, password })
-    });
-    var d = await r.json();
-    if (d.access_token) {
-      sb.session = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: d.user.id, email: d.user.email } };
-      storeSession(sb.session);
-    }
-    return d;
-  },
+async function _signUp(email, password) {
+  var r = await fetch(SUPABASE_URL + '/auth/v1/signup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify({ email: email, password: password })
+  });
+  return r.json();
+}
 
-  refresh: async function(refresh_token) {
-    var r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
-      body: JSON.stringify({ refresh_token })
-    });
-    var d = await r.json();
-    if (d.access_token) {
-      sb.session = { access_token: d.access_token, refresh_token: d.refresh_token, user: { id: d.user.id, email: d.user.email } };
-      storeSession(sb.session);
-      return true;
-    }
-    return false;
-  },
+async function _refreshToken(rt) {
+  var r = await fetch(SUPABASE_URL + '/auth/v1/token?grant_type=refresh_token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY },
+    body: JSON.stringify({ refresh_token: rt })
+  });
+  return r.json();
+}
 
-  restoreSession: async function() {
-    var s = loadSession();
-    if (!s) return false;
-    try {
-      var r = await fetch(SUPABASE_URL + '/auth/v1/user', {
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + s.access_token }
-      });
-      if (r.ok) {
-        var u = await r.json();
-        sb.session = { access_token: s.access_token, refresh_token: s.refresh_token, user: { id: u.id, email: u.email } };
-        storeSession(sb.session);
-        return true;
-      }
-    } catch(e) {}
-    if (s.refresh_token) return await sb.refresh(s.refresh_token);
-    clearSession();
-    return false;
-  },
+async function _getUser(token) {
+  var r = await fetch(SUPABASE_URL + '/auth/v1/user', {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + token }
+  });
+  if (!r.ok) return null;
+  return r.json();
+}
 
-  signOut: async function() {
-    try {
-      if (sb.session) await fetch(SUPABASE_URL + '/auth/v1/logout', {
-        method: 'POST', headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + sb.session.access_token }
-      });
-    } catch(e) {}
-    sb.session = null;
-    clearSession();
-    clearCacheLocal();
-  },
+function _applySession(d) {
+  _session = {
+    access_token:  d.access_token,
+    refresh_token: d.refresh_token,
+    user: { id: d.user.id, email: d.user.email }
+  };
+  _saveSession(_session);
+}
 
-  fetchData: async function() {
-    if (!sb.session) return null;
+async function _fetchRemote() {
+  if (!_session) return null;
+  try {
     var r = await fetch(
-      SUPABASE_URL + '/rest/v1/' + TABLE_NAME + '?user_id=eq.' + sb.session.user.id + '&select=data',
-      { headers: sb._h() }
+      SUPABASE_URL + '/rest/v1/' + TABLE +
+      '?user_id=eq.' + _session.user.id + '&select=data',
+      { headers: _authHdr() }
     );
-    if (!r.ok) { console.error('fetchData failed', r.status, await r.text()); return null; }
+    if (!r.ok) {
+      console.error('[SLO] fetchRemote HTTP', r.status, await r.text());
+      return null;
+    }
     var rows = await r.json();
-    return (Array.isArray(rows) && rows.length > 0) ? (rows[0].data || {}) : {};
-  },
+    if (Array.isArray(rows) && rows.length > 0) {
+      return rows[0].data || {};
+    }
+    return {};  
+  } catch(e) {
+    console.error('[SLO] fetchRemote error', e);
+    return null;
+  }
+}
 
-  writeData: async function(dataObj) {
-    if (!sb.session) return false;
-    var body = JSON.stringify({ user_id: sb.session.user.id, data: dataObj, updated_at: new Date().toISOString() });
-    var r = await fetch(SUPABASE_URL + '/rest/v1/' + TABLE_NAME, {
-      method: 'POST',
-      headers: Object.assign({}, sb._h(), { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+async function _writeRemote(dataObj) {
+  if (!_session) { console.warn('[SLO] writeRemote: no session'); return false; }
+  try {
+    var body = JSON.stringify({
+      user_id:    _session.user.id,
+      data:       dataObj,
+      updated_at: new Date().toISOString()
+    });
+    var r = await fetch(SUPABASE_URL + '/rest/v1/' + TABLE, {
+      method:  'POST',
+      headers: Object.assign({}, _authHdr(), {
+        'Prefer': 'resolution=merge-duplicates,return=minimal'
+      }),
       body: body
     });
     if (!r.ok) {
       var txt = await r.text();
-      console.error('writeData failed', r.status, txt);
+      console.error('[SLO] writeRemote HTTP', r.status, txt);
       return false;
     }
+    console.log('[SLO] writeRemote OK');
     return true;
+  } catch(e) {
+    console.error('[SLO] writeRemote error', e);
+    return false;
   }
-};
-
-var _mem = {};
-var _saveTimer = null;
+}
 
 function getData() {
   return _mem;
@@ -130,14 +126,87 @@ function getData() {
 
 function saveData(data) {
   _mem = data;
+  _saveCache(data); 
+  _dirty = true;
 
-  storeCacheLocal(data);
+  clearTimeout(_writeTimer);
+  _writeTimer = setTimeout(function() {
+    _writeRemote(_mem).then(function(ok) {
+      if (ok) _dirty = false;
+    });
+  }, 500);
+}
 
-  clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(async function() {
-    var ok = await sb.writeData(data).catch(function(e) { console.error('writeData error', e); return false; });
-    if (!ok) console.warn('Remote save failed — data is safe in localStorage backup.');
-  }, 600);
+async function _restoreSession() {
+  var stored = _loadSession();
+  if (!stored || !stored.access_token) {
+    console.log('[SLO] no stored session');
+    return false;
+  }
+
+  var user = await _getUser(stored.access_token);
+  if (user && user.id) {
+    console.log('[SLO] access_token still valid for', user.email);
+    _session = { access_token: stored.access_token, refresh_token: stored.refresh_token, user: { id: user.id, email: user.email } };
+    _saveSession(_session);
+    return true;
+  }
+
+  console.log('[SLO] access_token expired, trying refresh_token');
+  if (!stored.refresh_token) { _dropSession(); return false; }
+  var rd = await _refreshToken(stored.refresh_token);
+  if (rd && rd.access_token && rd.user) {
+    console.log('[SLO] refresh_token worked for', rd.user.email);
+    _applySession(rd);
+    return true;
+  }
+
+  console.log('[SLO] refresh_token also failed, session gone');
+  _dropSession();
+  return false;
+}
+
+async function enterApp() {
+  showLoadingScreen(true);
+
+  var remote = await _fetchRemote();
+  if (remote !== null) {
+    console.log('[SLO] loaded from Supabase');
+    _mem = remote;
+    _saveCache(_mem);
+  } else {
+    console.warn('[SLO] Supabase fetch failed — using local cache');
+    _mem = _loadCache();
+  }
+
+  if (!_mem.customCategories) _mem.customCategories = [];
+
+  var el = document.getElementById('user-email-display');
+  if (el && _session) el.textContent = _session.user.email;
+
+  showPage('home');
+  renderHome();
+  showLoadingScreen(false);
+}
+
+function showPage(page) {
+  ['auth','home','category'].forEach(function(p) {
+    var el = document.getElementById('page-' + p);
+    if (el) el.classList.toggle('hidden', p !== page);
+  });
+}
+
+var _loadingEl = null;
+function showLoadingScreen(show) {
+  if (show && !_loadingEl) {
+    _loadingEl = document.createElement('div');
+    _loadingEl.className = 'loading-screen';
+    _loadingEl.innerHTML = '<div class="logo-mark">✦</div><p>Loading your data…</p>';
+    document.body.appendChild(_loadingEl);
+  } else if (!show && _loadingEl) {
+    _loadingEl.remove();
+    _loadingEl = null;
+  }
 }
 
 function switchTab(tab) {
@@ -146,25 +215,17 @@ function switchTab(tab) {
   document.getElementById('tab-signup').classList.toggle('active', !isLogin);
   document.getElementById('form-login').classList.toggle('hidden', !isLogin);
   document.getElementById('form-signup').classList.toggle('hidden', isLogin);
-  clearAuthMessages();
+  _clearMsgs();
 }
 
-function clearAuthMessages() {
+function _clearMsgs() {
   ['login-error','signup-error','signup-success'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) { el.textContent = ''; el.classList.add('hidden'); }
   });
 }
-
-function showAuthError(id, msg) {
-  var el = document.getElementById(id);
-  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
-}
-
-function showAuthSuccess(id, msg) {
-  var el = document.getElementById(id);
-  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
-}
+function _err(id, msg) { var el = document.getElementById(id); if(el){ el.textContent = msg; el.classList.remove('hidden'); } }
+function _ok(id, msg)  { var el = document.getElementById(id); if(el){ el.textContent = msg; el.classList.remove('hidden'); } }
 
 function setLoading(btnId, on) {
   var btn = document.getElementById(btnId);
@@ -183,99 +244,67 @@ function togglePassword(inputId, btn) {
 }
 
 async function handleLogin() {
-  clearAuthMessages();
+  _clearMsgs();
   var email = (document.getElementById('login-email').value || '').trim();
-  var pw    = document.getElementById('login-password').value || '';
-  if (!email || !pw) { showAuthError('login-error', 'Please fill in all fields.'); return; }
+  var pw    =  document.getElementById('login-password').value || '';
+  if (!email || !pw) { _err('login-error', 'Please fill in all fields.'); return; }
+
   setLoading('login-btn', true);
   try {
-    var d = await sb.signIn(email, pw);
+    var d = await _signIn(email, pw);
     if (!d.access_token) {
-      showAuthError('login-error', d.error_description || d.msg || 'Login failed. Check your credentials.');
+      _err('login-error', d.error_description || d.msg || 'Login failed. Check your credentials.');
     } else {
+      _applySession(d);
       await enterApp();
     }
-  } catch(e) { showAuthError('login-error', 'Network error. Please try again.'); }
+  } catch(e) {
+    _err('login-error', 'Network error. Please try again.');
+  }
   setLoading('login-btn', false);
 }
 
 async function handleSignup() {
-  clearAuthMessages();
+  _clearMsgs();
   var email = (document.getElementById('signup-email').value    || '').trim();
-  var pw    = document.getElementById('signup-password').value  || '';
-  var pw2   = document.getElementById('signup-confirm').value   || '';
-  if (!email || !pw || !pw2)  { showAuthError('signup-error', 'Please fill in all fields.'); return; }
-  if (pw.length < 6)          { showAuthError('signup-error', 'Password must be at least 6 characters.'); return; }
-  if (pw !== pw2)             { showAuthError('signup-error', 'Passwords do not match.'); return; }
+  var pw    =  document.getElementById('signup-password').value || '';
+  var pw2   =  document.getElementById('signup-confirm').value  || '';
+  if (!email || !pw || !pw2) { _err('signup-error','Please fill in all fields.'); return; }
+  if (pw.length < 6)         { _err('signup-error','Password must be at least 6 characters.'); return; }
+  if (pw !== pw2)            { _err('signup-error','Passwords do not match.'); return; }
+
   setLoading('signup-btn', true);
   try {
-    var d = await sb.signUp(email, pw);
+    var d = await _signUp(email, pw);
     if (d.error || d.error_description) {
-      showAuthError('signup-error', d.error_description || d.msg || 'Sign up failed.');
-    } else if (sb.session) {
+      _err('signup-error', d.error_description || d.msg || 'Sign up failed.');
+    } else if (d.access_token && d.user) {
+      _applySession(d);
       await enterApp();
     } else {
-      showAuthSuccess('signup-success', '✅ Account created! Check your email to confirm, then sign in.');
+      _ok('signup-success', '✅ Account created! Check your email to confirm, then sign in.');
       setTimeout(function() { switchTab('login'); }, 3000);
     }
-  } catch(e) { showAuthError('signup-error', 'Network error. Please try again.'); }
+  } catch(e) {
+    _err('signup-error', 'Network error. Please try again.');
+  }
   setLoading('signup-btn', false);
 }
 
 async function handleSignOut() {
-  await sb.signOut();
+  if (_session) {
+    try {
+      await fetch(SUPABASE_URL + '/auth/v1/logout', {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + _session.access_token }
+      });
+    } catch(e) {}
+  }
+  _session = null;
   _mem = {};
+  _dropSession();
+  _dropCache();
   showPage('auth');
-}
-
-async function enterApp() {
-  showLoadingScreen(true);
-  try {
-    var remote = await sb.fetchData();
-
-    if (remote !== null && typeof remote === 'object') {
-      _mem = remote;
-      storeCacheLocal(_mem);
-    } else {
-      console.warn('Supabase fetch failed, using local cache');
-      _mem = loadCacheLocal();
-    }
-
-    if (!_mem.customCategories) _mem.customCategories = [];
-
-    var emailEl = document.getElementById('user-email-display');
-    if (emailEl && sb.session) emailEl.textContent = sb.session.user.email;
-
-    showPage('home');
-    renderHome();
-  } catch(e) {
-    console.error('enterApp error:', e);
-    _mem = loadCacheLocal();
-    if (!_mem.customCategories) _mem.customCategories = [];
-    showPage('home');
-    renderHome();
-  }
-  showLoadingScreen(false);
-}
-
-function showPage(page) {
-  ['auth','home','category'].forEach(function(p) {
-    var el = document.getElementById('page-' + p);
-    if (el) el.classList.toggle('hidden', p !== page);
-  });
-}
-
-var _loadingEl = null;
-function showLoadingScreen(show) {
-  if (show && !_loadingEl) {
-    _loadingEl = document.createElement('div');
-    _loadingEl.className = 'loading-screen';
-    _loadingEl.innerHTML = '<div class="logo-mark">\u2726</div><p>Loading your data\u2026</p>';
-    document.body.appendChild(_loadingEl);
-  } else if (!show && _loadingEl) {
-    _loadingEl.remove();
-    _loadingEl = null;
-  }
 }
 
 document.addEventListener('keydown', function(e) {
@@ -287,12 +316,17 @@ document.addEventListener('keydown', function(e) {
 });
 
 window.addEventListener('load', async function() {
+  console.log('[SLO] bootstrap start');
   showLoadingScreen(true);
-  var ok = await sb.restoreSession();
+
+  var ok = await _restoreSession();
+  console.log('[SLO] restoreSession =', ok);
+
   if (ok) {
     await enterApp();
   } else {
     showLoadingScreen(false);
     showPage('auth');
   }
+  console.log('[SLO] bootstrap done');
 });
