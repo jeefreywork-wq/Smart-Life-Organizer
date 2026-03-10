@@ -348,14 +348,15 @@ var SCHEMAS = {
     columns: [
       { key: 'date',    label: 'Date' },
       { key: 'day',     label: 'Day' },
-      { key: 'hours',   label: 'Hours Worked' },
+      { key: 'hours',   label: 'Hours Worked', type: 'workhours' },
       { key: 'notes',   label: 'Notes' },
     ],
     fields: [
       { key: 'date',    label: 'Date',           type: 'date',   required: true },
       { key: 'day',     label: 'Day of Week',    type: 'select', required: true,
         options: ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'] },
-      { key: 'hours',   label: 'Hours Worked',   type: 'number', required: true, placeholder: 'e.g. 8' },
+      { key: 'hours',   label: 'Hours',          type: 'number', required: true, placeholder: 'e.g. 8' },
+      { key: 'minutes', label: 'Minutes',        type: 'number', required: false, placeholder: '0' },
       { key: 'notes',   label: 'Notes',          type: 'textarea', placeholder: 'Optional notes...' },
     ],
     hasWorkSummary: true,
@@ -668,6 +669,14 @@ function renderCell(col, item, schema) {
     }).join('') + '</div>';
   }
 
+  if (col.type === 'workhours') {
+    var wh = parseInt(item.hours || 0);
+    var wm = parseInt(item.minutes || 0);
+    if (wh > 0 && wm > 0) return wh + 'h ' + wm + 'm';
+    if (wh > 0) return wh + 'h';
+    if (wm > 0) return wm + 'm';
+    return '—';
+  }
   if (col.type === 'image') return val ? '<img class="row-image" src="' + val + '" alt="photo">' : '';
   if (col.type === 'price') return val ? '<span class="price-cell">' + parseFloat(val||0).toFixed(2) + ' MAD</span>' : '—';
   if (col.type === 'badge') {
@@ -709,26 +718,38 @@ function buildPriceTotals(schema, items, filterVal) {
     '<span class="grand-total-value">' + grandTotal.toFixed(2) + ' MAD</span></div></div>';
 }
 
+function formatHoursMinutes(decimalHours) {
+  var h = Math.floor(decimalHours);
+  var m = Math.round((decimalHours - h) * 60);
+  if (m === 60) { h += 1; m = 0; }
+  if (h > 0 && m > 0) return h + 'h ' + m + 'm';
+  if (h > 0) return h + 'h';
+  if (m > 0) return m + 'm';
+  return '0h';
+}
+
 function buildWorkSummary(items) {
   if (!items || items.length === 0) return '';
-  var totalHours = items.reduce(function(s, i) { return s + parseFloat(i.hours || 0); }, 0);
+  var totalMinutes = items.reduce(function(s, i) {
+    return s + (parseInt(i.hours || 0) * 60) + parseInt(i.minutes || 0);
+  }, 0);
   var totalDays  = items.length;
-  var avgHours   = totalDays > 0 ? (totalHours / totalDays).toFixed(1) : 0;
+  var avgMinutes = totalDays > 0 ? totalMinutes / totalDays : 0;
   var byDay = {};
   ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].forEach(function(d) { byDay[d] = 0; });
   items.forEach(function(item) {
     var d = item.day || 'Other';
     if (!byDay[d]) byDay[d] = 0;
-    byDay[d] += parseFloat(item.hours || 0);
+    byDay[d] += (parseInt(item.hours || 0) * 60) + parseInt(item.minutes || 0);
   });
   var dayChips = Object.keys(byDay).filter(function(d) { return byDay[d] > 0; }).map(function(d) {
     return '<div class="total-chip"><div class="total-chip-label">' + d + '</div>' +
-      '<div class="total-chip-value">' + byDay[d].toFixed(1) + 'h</div></div>';
+      '<div class="total-chip-value">' + formatHoursMinutes(byDay[d] / 60) + '</div></div>';
   }).join('');
   return '<div class="summary-panel"><div class="summary-title">💼 Work Summary</div><div class="totals-grid">' +
-    '<div class="total-chip"><div class="total-chip-label">Total Hours</div><div class="total-chip-value">' + totalHours.toFixed(1) + 'h</div></div>' +
+    '<div class="total-chip"><div class="total-chip-label">Total Hours</div><div class="total-chip-value">' + formatHoursMinutes(totalMinutes / 60) + '</div></div>' +
     '<div class="total-chip"><div class="total-chip-label">Days Logged</div><div class="total-chip-value">' + totalDays + '</div></div>' +
-    '<div class="total-chip"><div class="total-chip-label">Avg per Day</div><div class="total-chip-value">' + avgHours + 'h</div></div>' +
+    '<div class="total-chip"><div class="total-chip-label">Avg per Day</div><div class="total-chip-value">' + formatHoursMinutes(avgMinutes / 60) + '</div></div>' +
     '</div>' + (dayChips ? '<div class="summary-title" style="margin-top:1rem">Hours by Day</div><div class="totals-grid">' + dayChips + '</div>' : '') + '</div>';
 }
 
