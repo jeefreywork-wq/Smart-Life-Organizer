@@ -555,7 +555,6 @@ function renderCategory(categoryId) {
       '<button class="back-btn" onclick="showHome()">← Back</button>' +
       '<div class="cat-title">' + cat.icon + ' ' + escapeHtml(cat.name) + '</div>' +
       topbarExtra +
-      '<button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">' + (document.body.classList.contains('light') ? '☀️' : '🌙') + '</button>' +
       '<button class="btn-primary btn-small" onclick="showAddItemModal()">' + schema.addLabel + '</button>' +
     '</div>' +
     '<div class="cat-body">' +
