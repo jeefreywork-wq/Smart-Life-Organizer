@@ -171,16 +171,17 @@ var SCHEMAS = {
   school: {
     addLabel: 'Add Entry',
     columns: [
-      { key: 'subject',     label: 'Subject' },
-      { key: 'studyTime',   label: 'Study Time' },
-      { key: 'description', label: 'Description' },
+      { key: 'subject',   label: 'Subject' },
+      { key: 'studyTime', label: 'Study Time' },
+      { key: 'topics',    label: 'Topics' },
     ],
     fields: [
-      { key: 'subject',     label: 'Subject',     type: 'text',   required: true,  placeholder: 'e.g. Math' },
-      { key: 'studyTime',   label: 'Study Time',  type: 'select', required: true,
+      { key: 'subject',   label: 'Subject',    type: 'text',   required: true, placeholder: 'e.g. Math' },
+      { key: 'studyTime', label: 'Study Time', type: 'select', required: true,
         options: ['< 1 hour','1h – 2h','2h – 3h','3h+','Custom...'] },
-      { key: 'description', label: 'Description', type: 'textarea', placeholder: 'e.g. Solve exercises' },
+      { key: 'topics',    label: 'Topics (one per line)', type: 'textarea', placeholder: 'e.g. Chapter 3\nSolve exercises\nRevise notes' },
     ],
+    isSchool: true,
   },
 
   shopping: {
@@ -373,6 +374,7 @@ var SCHEMAS = {
       { key: 'notes',   label: 'Notes',          type: 'textarea', placeholder: 'Optional notes...' },
     ],
     hasWorkSummary: true,
+    noDone: true,
   },
 
   custom: {
@@ -663,11 +665,14 @@ function buildTable(schema, items) {
       '</td></tr></tbody>';
   } else {
     tbody = '<tbody>' + filtered.map(function(item) {
-      return '<tr>' +
+      var isDone = !!item._done;
+      var rowClass = isDone ? ' class="row-done"' : '';
+      return '<tr' + rowClass + '>' +
         schema.columns.map(function(col) {
-          return '<td>' + renderCell(col, item) + '</td>';
+          return '<td>' + renderCell(col, item, schema) + '</td>';
         }).join('') +
         '<td class="actions">' +
+          (schema.noDone ? '' : '<button class="btn-done btn-small' + (isDone ? ' active' : '') + '" onclick="toggleItemDone(\'' + item.id + '\')">' + (isDone ? 'Undo' : 'Done') + '</button>') +
           '<button class="btn-edit btn-small" onclick="showEditItemModal(\'' + item.id + '\')">Edit</button>' +
           '<button class="btn-danger btn-small" onclick="deleteItem(\'' + item.id + '\')">Delete</button>' +
         '</td>' +
@@ -678,8 +683,30 @@ function buildTable(schema, items) {
   return '<table>' + thead + tbody + '</table>';
 }
 
-function renderCell(col, item) {
+function renderCell(col, item, schema) {
   var val = item[col.key];
+  var isDone = !!item._done;
+
+  // School: render topics column as a checklist
+  if (schema && schema.isSchool && col.key === 'topics') {
+    var topicsRaw = String(val || '');
+    if (!topicsRaw.trim()) return '<span style="color:#666">—</span>';
+    var topicLines = topicsRaw.split('\n').map(function(t) { return t.trim(); }).filter(Boolean);
+    var completedMap = item._topicsDone || {};
+    return '<div class="topic-list">' + topicLines.map(function(topic, idx) {
+      var key = 'topic_' + idx;
+      var done = !!completedMap[key];
+      return '<div class="topic-item' + (done ? ' topic-done' : '') + '">' +
+        '<button class="topic-check' + (done ? ' checked' : '') + '" ' +
+          'onclick="toggleTopicDone(\'' + item.id + '\',' + idx + ',' + topicLines.length + ')" ' +
+          'title="' + (done ? 'Mark incomplete' : 'Mark complete') + '">' +
+          (done ? '✓' : '○') +
+        '</button>' +
+        '<span>' + escapeHtml(topic) + '</span>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
   if (col.type === 'image') return val ? '<img class="row-image" src="' + val + '" alt="photo">' : '';
   if (col.type === 'price') return val ? '<span class="price-cell">' + parseFloat(val||0).toFixed(2) + ' MAD</span>' : '—';
   if (col.type === 'badge') {
@@ -705,13 +732,15 @@ function buildPriceTotals(schema, items, filterVal) {
   if (!items || items.length === 0) return '';
   var groupKey = schema.totalsKey || 'category';
   var label    = schema.totalsLabel || 'Shopping';
+  // exclude done items from totals
+  var activeItems = items.filter(function(item) { return !item._done; });
   var byGroup  = {};
-  items.forEach(function(item) {
+  activeItems.forEach(function(item) {
     var grp = item[groupKey] || 'Other';
     if (!byGroup[grp]) byGroup[grp] = 0;
     byGroup[grp] += parseFloat(item.price || 0);
   });
-  var filteredItems = filterVal ? items.filter(function(i) { return i[groupKey] === filterVal; }) : items;
+  var filteredItems = filterVal ? activeItems.filter(function(i) { return i[groupKey] === filterVal; }) : activeItems;
   var grandTotal = filteredItems.reduce(function(s, i) { return s + parseFloat(i.price || 0); }, 0);
   var chipsHtml = Object.keys(byGroup).map(function(grp) {
     return '<div class="total-chip"><div class="total-chip-label">' + escapeHtml(grp) + '</div>' +
@@ -908,6 +937,34 @@ function submitItemForm() {
   renderCategory(state.currentCategoryId);
 }
 
+function toggleItemDone(itemId) {
+  var items = getItems(state.currentCategoryId);
+  items = items.map(function(i) {
+    if (i.id === itemId) return Object.assign({}, i, { _done: !i._done });
+    return i;
+  });
+  saveItems(state.currentCategoryId, items)
+    .catch(function(e) { console.error('Toggle done error:', e); });
+  renderCategory(state.currentCategoryId);
+}
+
+function toggleTopicDone(itemId, topicIdx, totalTopics) {
+  var items = getItems(state.currentCategoryId);
+  items = items.map(function(i) {
+    if (i.id !== itemId) return i;
+    var topicsDone = Object.assign({}, i._topicsDone || {});
+    var key = 'topic_' + topicIdx;
+    topicsDone[key] = !topicsDone[key];
+    // auto-mark row done if all topics are done
+    var doneCount = Object.keys(topicsDone).filter(function(k) { return topicsDone[k]; }).length;
+    return Object.assign({}, i, { _topicsDone: topicsDone, _done: doneCount >= totalTopics });
+  });
+  saveItems(state.currentCategoryId, items)
+    .catch(function(e) { console.error('Toggle topic done error:', e); });
+  renderCategory(state.currentCategoryId);
+}
+
+
 function deleteItem(itemId) {
   if (!confirm('Delete this item?')) return;
   var items = getItems(state.currentCategoryId).filter(function(i) { return i.id !== itemId; });
@@ -968,7 +1025,7 @@ function initApp() {
   state.selectedCategoryId = null;
   state.currentCategoryId  = null;
 
-  // Show a brief loading state inside the app
+
   var grid = document.getElementById('category-grid');
   if (grid) grid.innerHTML = '<div class="loading-cats">Loading your data…</div>';
 
