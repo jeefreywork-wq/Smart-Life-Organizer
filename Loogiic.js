@@ -1,6 +1,3 @@
-// ─────────────────────────────────────────────
-//  Firebase Config & Init
-// ─────────────────────────────────────────────
 var firebaseConfig = {
   apiKey: "AIzaSyC5gkCjHI0kRkilUSSPaW1VbqREiFYiZAU",
   authDomain: "todolist-315e6.firebaseapp.com",
@@ -15,9 +12,6 @@ firebase.initializeApp(firebaseConfig);
 var auth = firebase.auth();
 var db   = firebase.firestore();
 
-// ─────────────────────────────────────────────
-//  Auth helpers
-// ─────────────────────────────────────────────
 function switchAuthTab(tab) {
   var isLogin = tab === 'login';
   document.getElementById('form-login').classList.toggle('hidden', !isLogin);
@@ -108,18 +102,13 @@ function friendlyAuthError(code) {
   return map[code] || 'Something went wrong. Please try again.';
 }
 
-// ─────────────────────────────────────────────
-//  Auth state listener — controls which page shows
-// ─────────────────────────────────────────────
 auth.onAuthStateChanged(function(user) {
   document.getElementById('loading-overlay').style.display = 'none';
 
   if (user) {
-    // Show app, hide auth
     document.getElementById('page-auth').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
 
-    // Update user bar
     var displayName = user.displayName || user.email.split('@')[0];
     document.getElementById('user-name').textContent = displayName;
     var avatarEl = document.getElementById('user-avatar');
@@ -130,20 +119,15 @@ auth.onAuthStateChanged(function(user) {
       avatarEl.textContent = displayName.charAt(0).toUpperCase();
     }
 
-    // Boot app
     currentUserId = user.uid;
     initApp();
   } else {
-    // Show auth, hide app
     document.getElementById('page-auth').classList.remove('hidden');
     document.getElementById('app').classList.add('hidden');
     currentUserId = null;
   }
 });
 
-// ─────────────────────────────────────────────
-//  App Data
-// ─────────────────────────────────────────────
 var currentUserId = null;
 
 var BUILT_IN_CATEGORIES = [
@@ -332,6 +316,7 @@ var SCHEMAS = {
     filterKey: 'status',
     filterType: 'select_filter',
     filterOptions: ['Want to Watch','Watching','Watched','Dropped'],
+    noDone: true,
   },
 
   events: {
@@ -392,12 +377,9 @@ var SCHEMAS = {
   },
 };
 
-// ─────────────────────────────────────────────
-//  In-memory cache (loaded from Firestore)
-// ─────────────────────────────────────────────
 var appCache = {
   customCategories: [],
-  items: {}           // { categoryId: [item, …] }
+  items: {}
 };
 
 var state = {
@@ -408,11 +390,6 @@ var state = {
   loaded: false,
 };
 
-// ─────────────────────────────────────────────
-//  Firestore paths
-//  /users/{uid}/meta/config        → customCategories
-//  /users/{uid}/items/{categoryId} → { items: […] }
-// ─────────────────────────────────────────────
 function userDoc() {
   return db.collection('users').doc(currentUserId);
 }
@@ -450,9 +427,6 @@ function saveCategoryItems(categoryId) {
   });
 }
 
-// ─────────────────────────────────────────────
-//  Data helpers (replaced localStorage versions)
-// ─────────────────────────────────────────────
 function getCategories() {
   return BUILT_IN_CATEGORIES.concat(appCache.customCategories);
 }
@@ -470,9 +444,6 @@ function getSchema(category) {
   return SCHEMAS[category.id] || SCHEMAS.custom;
 }
 
-// ─────────────────────────────────────────────
-//  Navigation
-// ─────────────────────────────────────────────
 function showHome() {
   state.currentCategoryId = null;
   document.getElementById('page-home').classList.remove('hidden');
@@ -491,9 +462,6 @@ function openSelectedCategory() {
   if (state.selectedCategoryId) showCategory(state.selectedCategoryId);
 }
 
-// ─────────────────────────────────────────────
-//  Render Home
-// ─────────────────────────────────────────────
 function renderHome() {
   var categories = getCategories();
   var grid    = document.getElementById('category-grid');
@@ -537,9 +505,6 @@ function deleteCategoryCard(event, id) {
   renderHome();
 }
 
-// ─────────────────────────────────────────────
-//  Add Category Modal
-// ─────────────────────────────────────────────
 function showAddCategoryModal() {
   showModal(
     '<div class="modal-title">Add Category</div>' +
@@ -574,9 +539,6 @@ function submitNewCategory() {
   renderHome();
 }
 
-// ─────────────────────────────────────────────
-//  Render Category Page
-// ─────────────────────────────────────────────
 function renderCategory(categoryId) {
   var cat = getCategories().find(function(c) { return c.id === categoryId; });
   if (!cat) { showHome(); return; }
@@ -687,7 +649,6 @@ function renderCell(col, item, schema) {
   var val = item[col.key];
   var isDone = !!item._done;
 
-  // School: render topics column as a checklist
   if (schema && schema.isSchool && col.key === 'topics') {
     var topicsRaw = String(val || '');
     if (!topicsRaw.trim()) return '<span style="color:#666">—</span>';
@@ -725,14 +686,10 @@ function renderCell(col, item, schema) {
   return escapeHtml(String(val || '—'));
 }
 
-// ─────────────────────────────────────────────
-//  Price Totals & Work Summary
-// ─────────────────────────────────────────────
 function buildPriceTotals(schema, items, filterVal) {
   if (!items || items.length === 0) return '';
   var groupKey = schema.totalsKey || 'category';
   var label    = schema.totalsLabel || 'Shopping';
-  // exclude done items from totals
   var activeItems = items.filter(function(item) { return !item._done; });
   var byGroup  = {};
   activeItems.forEach(function(item) {
@@ -775,18 +732,16 @@ function buildWorkSummary(items) {
     '</div>' + (dayChips ? '<div class="summary-title" style="margin-top:1rem">Hours by Day</div><div class="totals-grid">' + dayChips + '</div>' : '') + '</div>';
 }
 
-// ─────────────────────────────────────────────
-//  Grocery List
-// ─────────────────────────────────────────────
 function showGroceryList() {
   var items = getItems('food');
   if (items.length === 0) {
     showModal('<div class="modal-title">🛒 Grocery List</div><p style="color:#b07bb3;text-align:center;padding:2rem 0">No ingredients added yet.</p>');
     return;
   }
+  var activeItems = items.filter(function(item) { return !item._done; });
   var grouped = {};
   INGREDIENT_TYPES.forEach(function(t) { grouped[t] = []; });
-  items.forEach(function(item) {
+  activeItems.forEach(function(item) {
     var type = item.ingredientType || 'Other';
     if (!grouped[type]) grouped[type] = [];
     grouped[type].push(item);
@@ -811,13 +766,12 @@ function showGroceryList() {
         }).join('') +
       '</div></div>';
   }).join('');
-  showModal('<div class="modal-title">🛒 Grocery List</div>' + sectionsHtml +
+  var doneCount = items.length - activeItems.length;
+  var doneNote = doneCount > 0 ? '<p style="color:#b07bb3;text-align:center;font-size:0.82rem;margin-bottom:1rem">(' + doneCount + ' completed item' + (doneCount > 1 ? 's' : '') + ' excluded)</p>' : '';
+  showModal('<div class="modal-title">🛒 Grocery List</div>' + doneNote + sectionsHtml +
     (grandTotal > 0 ? '<div class="grocery-grand-total"><span>Total Cost</span><span style="color:#f59e0b">' + grandTotal.toFixed(2) + ' MAD</span></div>' : ''));
 }
 
-// ─────────────────────────────────────────────
-//  Item Forms
-// ─────────────────────────────────────────────
 function showAddItemModal() {
   state.editingItemId  = null;
   state.pendingImageData = null;
@@ -955,7 +909,6 @@ function toggleTopicDone(itemId, topicIdx, totalTopics) {
     var topicsDone = Object.assign({}, i._topicsDone || {});
     var key = 'topic_' + topicIdx;
     topicsDone[key] = !topicsDone[key];
-    // auto-mark row done if all topics are done
     var doneCount = Object.keys(topicsDone).filter(function(k) { return topicsDone[k]; }).length;
     return Object.assign({}, i, { _topicsDone: topicsDone, _done: doneCount >= totalTopics });
   });
@@ -973,9 +926,6 @@ function deleteItem(itemId) {
   renderCategory(state.currentCategoryId);
 }
 
-// ─────────────────────────────────────────────
-//  Utilities
-// ─────────────────────────────────────────────
 function compressImage(file, maxWidth, quality, callback) {
   var reader = new FileReader();
   reader.onload = function(e) {
@@ -1016,9 +966,6 @@ function escapeAttr(str) {
   return String(str).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// ─────────────────────────────────────────────
-//  App Init (called after auth)
-// ─────────────────────────────────────────────
 function initApp() {
   _filterSearch = '';
   _filterSelect = '';
