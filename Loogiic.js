@@ -175,11 +175,13 @@ var SCHEMAS = {
       { key: 'itemName', label: 'Item Name' },
       { key: 'category', label: 'Category' },
       { key: 'price',    label: 'Price (MAD)', type: 'price' },
+      { key: 'link',     label: 'Link', type: 'link' },
     ],
     fields: [
       { key: 'itemName', label: 'Item Name', type: 'text',   required: true,  placeholder: 'e.g. Lipstick' },
       { key: 'category', label: 'Category',  type: 'select', required: true,  options: SHOPPING_CATS },
       { key: 'price',    label: 'Price (MAD)', type: 'number', placeholder: '0.00' },
+      { key: 'link',     label: 'Link (optional)', type: 'text', placeholder: 'https://...' },
       { key: 'image',    label: 'Photo (optional)', type: 'file' },
     ],
     hasTotals: true,
