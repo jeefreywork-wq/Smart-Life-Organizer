@@ -1572,8 +1572,68 @@ body.light .grocery-items {
     flex-shrink: 0;
 }
 
-.theme-toggle:hover {
-    border-color: var(--pink);
-    box-shadow: 0 0 12px var(--pink-glow);
-    transform: rotate(20deg) scale(1.1);
+/* ── Food / Recipe grouped table ───────────────────────────────────── */
+.food-table .food-recipe-row td,
+.food-table .food-ingredient-row td {
+    vertical-align: middle;
 }
+
+.food-recipe-name-cell {
+    vertical-align: middle !important;
+    padding-top: 0 !important;
+    border-right: 2px solid rgba(255, 45, 120, 0.25);
+    min-width: 150px;
+    background: rgba(255, 45, 120, 0.04);
+}
+
+.food-recipe-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.92rem;
+    color: var(--pink-soft);
+    letter-spacing: 0.01em;
+}
+
+.food-recipe-icon {
+    font-size: 1.1rem;
+    filter: drop-shadow(0 0 6px var(--pink-glow));
+}
+
+.food-ingredient-name {
+    font-size: 0.88rem;
+    color: var(--text);
+    padding-left: 1rem !important;
+}
+
+.ingredient-bullet {
+    color: var(--pink-soft);
+    margin-right: 0.4rem;
+    font-size: 1rem;
+    opacity: 0.7;
+}
+
+.ingredient-done {
+    opacity: 0.45;
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.food-table .food-recipe-row {
+    border-top: 1px solid rgba(255, 45, 120, 0.18);
+}
+
+.food-table .food-ingredient-row td {
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+body.light .food-recipe-name-cell {
+    background: rgba(255, 45, 120, 0.04);
+    border-right-color: rgba(255, 45, 120, 0.18);
+}
+
+body.light .food-table .food-ingredient-row td {
+    border-top-color: rgba(0, 0, 0, 0.04);
+}
+

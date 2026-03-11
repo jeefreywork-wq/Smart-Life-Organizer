@@ -143,10 +143,10 @@ var BUILT_IN_CATEGORIES = [
   { id: 'work',     name: 'Work',          icon: '💼', builtIn: true },
 ];
 
-var INGREDIENT_TYPES = ['Vegetables','Fruits','Dairy','Meat','Grains','Spices','Drinks','Other'];
+var INGREDIENT_TYPES = ['Vegetables','Fruits','Dairy','Meat','Grains','Spices','Drinks','Sauces','Other'];
 var INGREDIENT_ICONS = {
   Vegetables: '🥦', Fruits: '🍎', Dairy: '🥛', Meat: '🥩',
-  Grains: '🌾', Spices: '🌶️', Drinks: '🥤', Other: '🛒'
+  Grains: '🌾', Spices: '🌶️', Drinks: '🥤', Sauces: '🥫', Other: '🛒'
 };
 
 var SHOPPING_CATS = ['Makeup','Skincare','Food','Clothes','Electronics','Books','Pharmacy','Other'];
@@ -563,7 +563,7 @@ function renderCategory(categoryId) {
     '<div class="cat-body">' +
       buildTableControls(schema, items) +
       '<div class="table-wrapper"><div class="table-scroll">' +
-        buildTable(schema, items) +
+        (categoryId === 'food' ? buildFoodTable(items) : buildTable(schema, items)) +
       '</div></div>' +
       (schema.hasTotals ? buildPriceTotals(schema, items, '') : '') +
       (schema.hasWorkSummary ? buildWorkSummary(items) : '') +
@@ -601,7 +601,9 @@ function filterTable(el) {
   var schema = getSchema(cat);
   var items  = getItems(state.currentCategoryId);
   var wrapper = document.querySelector('.table-scroll');
-  if (wrapper) wrapper.innerHTML = buildTable(schema, items);
+  if (wrapper) wrapper.innerHTML = state.currentCategoryId === 'food'
+    ? buildFoodTable(items)
+    : buildTable(schema, items);
 }
 
 function buildTable(schema, items) {
@@ -646,6 +648,89 @@ function buildTable(schema, items) {
   }
 
   return '<table>' + thead + tbody + '</table>';
+}
+
+function buildFoodTable(items) {
+  var search = _filterSearch;
+
+  // Filter items by search
+  var filtered = items.filter(function(item) {
+    if (!search) return true;
+    return Object.values(item).some(function(v) {
+      return String(v || '').toLowerCase().includes(search);
+    });
+  });
+
+  if (filtered.length === 0) {
+    return '<table><thead><tr><th>Recipe</th><th>Ingredients</th></tr></thead>' +
+      '<tbody><tr class="empty-row"><td colspan="2">' +
+        (search ? 'No matching items.' : 'No ingredients yet. Click "Add Ingredient" to get started.') +
+      '</td></tr></tbody></table>';
+  }
+
+  // Group by recipe name
+  var recipeOrder = [];
+  var byRecipe = {};
+  filtered.forEach(function(item) {
+    var rName = (item.recipeName || '(No Recipe)').trim();
+    if (!byRecipe[rName]) {
+      byRecipe[rName] = [];
+      recipeOrder.push(rName);
+    }
+    byRecipe[rName].push(item);
+  });
+
+  var tbody = '<tbody>';
+  recipeOrder.forEach(function(recipeName) {
+    var ingredients = byRecipe[recipeName];
+    tbody += '<tr class="food-recipe-row">' +
+      '<td class="food-recipe-name-cell" rowspan="' + ingredients.length + '">' +
+        '<div class="food-recipe-label">' +
+          '<span class="food-recipe-icon">🍽️</span>' +
+          '<span>' + escapeHtml(recipeName) + '</span>' +
+        '</div>' +
+      '</td>' +
+      buildFoodIngredientCells(ingredients[0]) +
+    '</tr>';
+    for (var i = 1; i < ingredients.length; i++) {
+      tbody += '<tr class="food-ingredient-row">' + buildFoodIngredientCells(ingredients[i]) + '</tr>';
+    }
+  });
+  tbody += '</tbody>';
+
+  var thead = '<thead><tr>' +
+    '<th>Recipe</th>' +
+    '<th>Ingredient</th>' +
+    '<th>Type</th>' +
+    '<th>Actions</th>' +
+    '</tr></thead>';
+
+  return '<table class="food-table">' + thead + tbody + '</table>';
+}
+
+function buildFoodIngredientCells(item) {
+  var isDone = !!item._done;
+  var typeVal = item.ingredientType || '';
+  var typeClass = 'type-' + String(typeVal).toLowerCase().replace(/\s+/g, '-');
+  var typeBadge = typeVal
+    ? '<span class="type-badge ' + typeClass + '">' +
+        (INGREDIENT_ICONS[typeVal] || '') + ' ' + escapeHtml(typeVal) +
+      '</span>'
+    : '—';
+  var priceCell = item.price
+    ? '<span class="price-cell">' + parseFloat(item.price || 0).toFixed(2) + ' MAD</span>'
+    : '—';
+
+  return '<td class="food-ingredient-name' + (isDone ? ' ingredient-done' : '') + '">' +
+      '<span class="ingredient-bullet">•</span>' +
+      escapeHtml(item.ingredient || '—') +
+    '</td>' +
+    '<td>' + typeBadge + '</td>' +
+    '<td class="actions">' +
+      '<button class="btn-done btn-small' + (isDone ? ' active' : '') + '" onclick="toggleItemDone(\'' + item.id + '\')">' + (isDone ? 'Undo' : 'Done') + '</button>' +
+      '<button class="btn-edit btn-small" onclick="showEditItemModal(\'' + item.id + '\')">Edit</button>' +
+      '<button class="btn-danger btn-small" onclick="deleteItem(\'' + item.id + '\')">Delete</button>' +
+    '</td>';
 }
 
 function renderCell(col, item, schema) {
@@ -779,20 +864,18 @@ function showGroceryList() {
     return '<div class="grocery-section">' +
       '<div class="grocery-type-header">' +
         '<div class="grocery-type-name"><span class="type-badge ' + typeClass + '">' + INGREDIENT_ICONS[type] + ' ' + type + '</span></div>' +
-        (typeTotal > 0 ? '<div class="grocery-type-total">' + typeTotal.toFixed(2) + ' MAD</div>' : '') +
       '</div>' +
       '<div class="grocery-items">' +
         group.map(function(i) {
           return '<div class="grocery-item">' + escapeHtml(i.ingredient) +
             (i.recipeName ? ' <span style="color:#a184af;font-size:0.78rem;">(' + escapeHtml(i.recipeName) + ')</span>' : '') +
-            (i.price ? ' — <span style="color:#10b981">' + parseFloat(i.price).toFixed(2) + ' MAD</span>' : '') + '</div>';
+            '</div>';
         }).join('') +
       '</div></div>';
   }).join('');
   var doneCount = items.length - activeItems.length;
   var doneNote = doneCount > 0 ? '<p style="color:#b07bb3;text-align:center;font-size:0.82rem;margin-bottom:1rem">(' + doneCount + ' completed item' + (doneCount > 1 ? 's' : '') + ' excluded)</p>' : '';
-  showModal('<div class="modal-title">🛒 Grocery List</div>' + doneNote + sectionsHtml +
-    (grandTotal > 0 ? '<div class="grocery-grand-total"><span>Total Cost</span><span style="color:#f59e0b">' + grandTotal.toFixed(2) + ' MAD</span></div>' : ''));
+  showModal('<div class="modal-title">🛒 Grocery List</div>' + doneNote + sectionsHtml);
 }
 
 function showAddItemModal() {
