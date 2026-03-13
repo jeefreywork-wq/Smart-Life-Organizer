@@ -141,6 +141,7 @@ var BUILT_IN_CATEGORIES = [
   { id: 'movies',   name: 'Movies/Series', icon: '🎬', builtIn: true },
   { id: 'events',   name: 'Events',        icon: '🎉', builtIn: true },
   { id: 'work',     name: 'Work',          icon: '💼', builtIn: true },
+  { id: 'calories', name: 'Calories',      icon: '🔥', builtIn: true },
 ];
 
 var INGREDIENT_TYPES = ['Vegetables','Fruits','Dairy','Meat','Grains','Spices','Drinks','Sauces','Other'];
@@ -365,6 +366,22 @@ var SCHEMAS = {
     noDone: true,
   },
 
+  calories: {
+    addLabel: 'Add Ingredient',
+    isCalories: true,
+    columns: [
+      { key: 'mealName',   label: 'Meal' },
+      { key: 'ingredient', label: 'Ingredient' },
+      { key: 'calories',   label: 'Calories (kcal)', type: 'kcal' },
+    ],
+    fields: [
+      { key: 'mealName',   label: 'Meal Name',      type: 'text',   required: true, placeholder: 'e.g. Lunch' },
+      { key: 'ingredient', label: 'Ingredient',      type: 'text',   required: true, placeholder: 'e.g. Chicken Breast' },
+      { key: 'calories',   label: 'Calories (kcal)', type: 'number', required: true, placeholder: 'e.g. 250' },
+    ],
+    noDone: true,
+  },
+
   custom: {
     addLabel: 'Add Item',
     columns: [
@@ -400,14 +417,22 @@ function userDoc() {
 function loadUserData() {
   return Promise.all([
     userDoc().collection('meta').doc('config').get(),
+    userDoc().collection('meta').doc('caloriesState').get(),
     userDoc().collection('items').get()
   ]).then(function(results) {
-    var configSnap = results[0];
-    var itemsSnap  = results[1];
+    var configSnap   = results[0];
+    var calSnap      = results[1];
+    var itemsSnap    = results[2];
 
     appCache.customCategories = configSnap.exists
       ? (configSnap.data().customCategories || [])
       : [];
+
+    // Restore saved calorie goals
+    if (calSnap.exists) {
+      var cs = getCaloriesState();
+      cs.goals = calSnap.data().goals || {};
+    }
 
     appCache.items = {};
     itemsSnap.forEach(function(doc) {
@@ -551,6 +576,12 @@ function renderCategory(categoryId) {
   var topbarExtra = '';
   if (schema.hasGrocery) {
     topbarExtra += '<button class="btn-outline btn-small" onclick="showGroceryList()">🛒 Grocery List</button>';
+  }
+
+  if (schema.isCalories) {
+    var html = buildCaloriesPage(cat, items);
+    document.getElementById('category-content').innerHTML = html;
+    return;
   }
 
   var html = '<div class="cat-page">' +
@@ -878,6 +909,294 @@ function showGroceryList() {
   showModal('<div class="modal-title">🛒 Grocery List</div>' + doneNote + sectionsHtml);
 }
 
+// ── Calories helpers ──────────────────────────────────────────
+
+function calTodayStr() {
+  var d = new Date();
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+function calFormatDate(dateStr) {
+  // dateStr: 'YYYY-MM-DD'  → 'Mon 14 Jul 2025'
+  var parts = dateStr.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return days[d.getDay()] + ' ' + d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function calShiftDate(dateStr, delta) {
+  var parts = dateStr.split('-');
+  var d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+  d.setDate(d.getDate() + delta);
+  var y = d.getFullYear();
+  var m = String(d.getMonth() + 1).padStart(2, '0');
+  var day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+
+function getCaloriesState() {
+  if (!appCache.caloriesState) {
+    appCache.caloriesState = { activeDay: calTodayStr(), goals: {} };
+  }
+  return appCache.caloriesState;
+}
+
+function saveCaloriesGoal(day, goal) {
+  var cs = getCaloriesState();
+  cs.goals[day] = goal;
+  userDoc().collection('meta').doc('caloriesState').set({ goals: cs.goals })
+    .catch(function(e) { console.error('Save calories goal error:', e); });
+}
+
+function buildCaloriesPage(cat, allItems) {
+  var cs = getCaloriesState();
+  var activeDay = cs.activeDay;
+  var dayItems = allItems.filter(function(i) { return (i.day || calTodayStr()) === activeDay; });
+  var goal = parseInt(cs.goals[activeDay] || 2000);
+  var totalCals = dayItems.reduce(function(s, i) { return s + parseInt(i.calories || 0); }, 0);
+  var remaining = goal - totalCals;
+  var pct = Math.min(100, goal > 0 ? Math.round(totalCals / goal * 100) : 0);
+  var barColor = pct >= 100 ? 'var(--red)' : pct >= 75 ? 'var(--amber)' : 'var(--green)';
+  var today = calTodayStr();
+
+  // Date navigator
+  var dateNav =
+    '<div class="cal-date-nav">' +
+      '<button class="cal-nav-btn" onclick="setCaloriesDay(\'' + calShiftDate(activeDay, -1) + '\')">‹</button>' +
+      '<div class="cal-date-display">' +
+        '<span class="cal-date-label">' + calFormatDate(activeDay) + '</span>' +
+        (activeDay !== today ? '<button class="cal-today-btn" onclick="setCaloriesDay(\'' + today + '\')">Today</button>' : '<span class="cal-today-badge">Today</span>') +
+      '</div>' +
+      '<button class="cal-nav-btn" onclick="setCaloriesDay(\'' + calShiftDate(activeDay, 1) + '\')">›</button>' +
+    '</div>';
+
+  // Meals table grouped by meal name
+  var mealOrder = [];
+  var byMeal = {};
+  dayItems.forEach(function(item) {
+    var m = (item.mealName || 'Other').trim();
+    if (!byMeal[m]) { byMeal[m] = []; mealOrder.push(m); }
+    byMeal[m].push(item);
+  });
+
+  var tbody = '';
+  if (dayItems.length === 0) {
+    tbody = '<tbody><tr class="empty-row"><td colspan="4">No entries for this day. Click "Add Ingredient" to start tracking.</td></tr></tbody>';
+  } else {
+    tbody = '<tbody>';
+    mealOrder.forEach(function(mealName) {
+      var ingredients = byMeal[mealName];
+      tbody += '<tr class="food-recipe-row">' +
+        '<td class="food-recipe-name-cell" rowspan="' + ingredients.length + '">' +
+          '<div class="food-recipe-label cal-meal-centered">' +
+            '<span>' + escapeHtml(mealName) + '</span>' +
+          '</div>' +
+        '</td>' +
+        buildCaloriesIngredientCells(ingredients[0]) +
+      '</tr>';
+      for (var i = 1; i < ingredients.length; i++) {
+        tbody += '<tr class="food-ingredient-row">' + buildCaloriesIngredientCells(ingredients[i]) + '</tr>';
+      }
+    });
+    tbody += '</tbody>';
+  }
+
+  var thead = '<thead><tr><th>Meal</th><th>Ingredient</th><th>Calories</th><th>Actions</th></tr></thead>';
+
+  return '<div class="cat-page">' +
+    '<div class="cat-topbar">' +
+      '<button class="back-btn" onclick="showHome()">← Back</button>' +
+      '<div class="cat-title">🔥 Calories</div>' +
+      '<button class="btn-primary btn-small" onclick="showAddCaloriesModal()">Add Ingredient</button>' +
+    '</div>' +
+    '<div class="cat-body">' +
+
+      dateNav +
+
+      '<div class="cal-stats-row">' +
+        '<div class="cal-stat-card">' +
+          '<div class="cal-stat-label">Daily Goal</div>' +
+          '<div class="cal-stat-value cal-goal-value">' +
+            '<span>' + goal + ' kcal</span>' +
+            '<button class="cal-edit-goal-btn" onclick="showEditGoalModal(\'' + activeDay + '\')" title="Edit goal">✏️</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="cal-stat-card highlight">' +
+          '<div class="cal-stat-label">Total Consumed</div>' +
+          '<div class="cal-stat-value" style="color:var(--amber)">' + totalCals + ' kcal</div>' +
+        '</div>' +
+        '<div class="cal-stat-card' + (remaining < 0 ? ' over-limit' : '') + '">' +
+          '<div class="cal-stat-label">Remaining</div>' +
+          '<div class="cal-stat-value" style="color:' + (remaining < 0 ? 'var(--red)' : 'var(--green)') + '">' +
+            (remaining < 0 ? '+' + Math.abs(remaining) + ' over' : remaining + ' kcal') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="cal-progress-wrapper">' +
+        '<div class="cal-progress-header"><span>Progress</span><span>' + pct + '%</span></div>' +
+        '<div class="cal-progress-track">' +
+          '<div class="cal-progress-fill" style="width:' + pct + '%;background:' + barColor + '"></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="table-controls">' +
+        '<input class="search-box" type="text" placeholder="Search meals & ingredients…" oninput="filterCaloriesTable(this)">' +
+      '</div>' +
+      '<div class="table-wrapper"><div class="table-scroll" id="cal-table-scroll">' +
+        '<table class="food-table">' + thead + tbody + '</table>' +
+      '</div></div>' +
+
+    '</div>' +
+  '</div>';
+}
+
+function buildCaloriesIngredientCells(item) {
+  var kcal = parseInt(item.calories || 0);
+  return '<td class="food-ingredient-name">' +
+      '<span class="ingredient-bullet">•</span>' + escapeHtml(item.ingredient || '—') +
+    '</td>' +
+    '<td><span class="cal-kcal-badge">' + kcal + ' kcal</span></td>' +
+    '<td class="actions">' +
+      '<button class="btn-edit btn-small" onclick="showEditItemModal(\'' + item.id + '\')">Edit</button>' +
+      '<button class="btn-danger btn-small" onclick="deleteItem(\'' + item.id + '\')">Delete</button>' +
+    '</td>';
+}
+
+function setCaloriesDay(day) {
+  getCaloriesState().activeDay = day;
+  renderCategory('calories');
+}
+
+function showAddCaloriesModal() {
+  state.editingItemId = null;
+  state.pendingImageData = null;
+  var cs = getCaloriesState();
+  showModal(
+    '<div class="modal-title">Add Ingredient</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Date</label>' +
+      '<input class="form-input" id="cal-field-day" type="date" value="' + cs.activeDay + '">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Meal Name *</label>' +
+      '<input class="form-input" id="cal-field-meal" type="text" placeholder="e.g. Lunch">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Ingredient *</label>' +
+      '<input class="form-input" id="cal-field-ingredient" type="text" placeholder="e.g. Chicken Breast">' +
+    '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Calories (kcal) *</label>' +
+      '<input class="form-input" id="cal-field-calories" type="number" placeholder="e.g. 250" min="0">' +
+    '</div>' +
+    '<div class="form-actions">' +
+      '<button class="btn-outline" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn-primary" onclick="submitCaloriesForm()">Save</button>' +
+    '</div>'
+  );
+}
+
+function submitCaloriesForm() {
+  var day = document.getElementById('cal-field-day').value;
+  var meal = (document.getElementById('cal-field-meal').value || '').trim();
+  var ingredient = (document.getElementById('cal-field-ingredient').value || '').trim();
+  var calories = document.getElementById('cal-field-calories').value;
+
+  var valid = true;
+  if (!day)        { document.getElementById('cal-field-day').style.borderColor = '#ef4444'; valid = false; }
+  else              document.getElementById('cal-field-day').style.borderColor = '';
+  if (!meal)       { document.getElementById('cal-field-meal').style.borderColor = '#ef4444'; valid = false; }
+  else              document.getElementById('cal-field-meal').style.borderColor = '';
+  if (!ingredient) { document.getElementById('cal-field-ingredient').style.borderColor = '#ef4444'; valid = false; }
+  else              document.getElementById('cal-field-ingredient').style.borderColor = '';
+  if (!calories)   { document.getElementById('cal-field-calories').style.borderColor = '#ef4444'; valid = false; }
+  else              document.getElementById('cal-field-calories').style.borderColor = '';
+  if (!valid) return;
+
+  var items = getItems('calories');
+  if (state.editingItemId) {
+    items = items.map(function(i) {
+      if (i.id !== state.editingItemId) return i;
+      return Object.assign({}, i, { day: day, mealName: meal, ingredient: ingredient, calories: calories });
+    });
+  } else {
+    items.push({ id: Date.now() + '-' + Math.random().toString(36).substr(2,6),
+      day: day, mealName: meal, ingredient: ingredient, calories: calories });
+  }
+  saveItems('calories', items).catch(function(e) { console.error(e); });
+  getCaloriesState().activeDay = day;
+  closeModal();
+  renderCategory('calories');
+}
+
+function showEditGoalModal(day) {
+  var cs = getCaloriesState();
+  var current = cs.goals[day] || 2000;
+  showModal(
+    '<div class="modal-title">Set Daily Goal — ' + calFormatDate(day) + '</div>' +
+    '<div class="form-group">' +
+      '<label class="form-label">Calorie Goal (kcal)</label>' +
+      '<input class="form-input" id="goal-input" type="number" value="' + current + '" min="100" placeholder="e.g. 2000">' +
+    '</div>' +
+    '<div class="form-actions">' +
+      '<button class="btn-outline" onclick="closeModal()">Cancel</button>' +
+      '<button class="btn-primary" onclick="submitGoalForm(\'' + day + '\')">Save Goal</button>' +
+    '</div>'
+  );
+}
+
+function submitGoalForm(day) {
+  var val = parseInt(document.getElementById('goal-input').value);
+  if (!val || val < 1) { document.getElementById('goal-input').style.borderColor = '#ef4444'; return; }
+  saveCaloriesGoal(day, val);
+  getCaloriesState().goals[day] = val;
+  closeModal();
+  renderCategory('calories');
+}
+
+function filterCaloriesTable(el) {
+  var search = el.value.toLowerCase();
+  var cs = getCaloriesState();
+  var activeDay = cs.activeDay;
+  var allItems = getItems('calories').filter(function(i) { return (i.day || calTodayStr()) === activeDay; });
+  var filtered = search ? allItems.filter(function(i) {
+    return (i.mealName||'').toLowerCase().includes(search) || (i.ingredient||'').toLowerCase().includes(search);
+  }) : allItems;
+
+  var mealOrder = [];
+  var byMeal = {};
+  filtered.forEach(function(item) {
+    var m = (item.mealName || 'Other').trim();
+    if (!byMeal[m]) { byMeal[m] = []; mealOrder.push(m); }
+    byMeal[m].push(item);
+  });
+
+  var tbody = '';
+  if (filtered.length === 0) {
+    tbody = '<tbody><tr class="empty-row"><td colspan="4">' + (search ? 'No matching items.' : 'No entries yet.') + '</td></tr></tbody>';
+  } else {
+    tbody = '<tbody>';
+    mealOrder.forEach(function(mealName) {
+      var ingredients = byMeal[mealName];
+      tbody += '<tr class="food-recipe-row">' +
+        '<td class="food-recipe-name-cell" rowspan="' + ingredients.length + '">' +
+          '<div class="food-recipe-label cal-meal-centered"><span>' + escapeHtml(mealName) + '</span></div>' +
+        '</td>' + buildCaloriesIngredientCells(ingredients[0]) + '</tr>';
+      for (var i = 1; i < ingredients.length; i++) {
+        tbody += '<tr class="food-ingredient-row">' + buildCaloriesIngredientCells(ingredients[i]) + '</tr>';
+      }
+    });
+    tbody += '</tbody>';
+  }
+  var scroll = document.getElementById('cal-table-scroll');
+  if (scroll) scroll.innerHTML = '<table class="food-table"><thead><tr><th>Meal</th><th>Ingredient</th><th>Calories</th><th>Actions</th></tr></thead>' + tbody + '</table>';
+}
+
 function showAddItemModal() {
   state.editingItemId  = null;
   state.pendingImageData = null;
@@ -890,6 +1209,26 @@ function showEditItemModal(itemId) {
   state.editingItemId = itemId;
   var cat = getCategories().find(function(c) { return c.id === state.currentCategoryId; });
   if (!cat) return;
+  if (cat.id === 'calories') {
+    var item = getItems('calories').find(function(i) { return i.id === itemId; });
+    if (!item) return;
+    var cs = getCaloriesState();
+    state.pendingImageData = null;
+    showModal(
+      '<div class="modal-title">Edit Ingredient</div>' +
+      '<div class="form-group"><label class="form-label">Date</label>' +
+        '<input class="form-input" id="cal-field-day" type="date" value="' + escapeAttr(item.day || calTodayStr()) + '"></div>' +
+      '<div class="form-group"><label class="form-label">Meal Name *</label>' +
+        '<input class="form-input" id="cal-field-meal" type="text" value="' + escapeAttr(item.mealName||'') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Ingredient *</label>' +
+        '<input class="form-input" id="cal-field-ingredient" type="text" value="' + escapeAttr(item.ingredient||'') + '"></div>' +
+      '<div class="form-group"><label class="form-label">Calories (kcal) *</label>' +
+        '<input class="form-input" id="cal-field-calories" type="number" value="' + escapeAttr(String(item.calories||'')) + '" min="0"></div>' +
+      '<div class="form-actions"><button class="btn-outline" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn-primary" onclick="submitCaloriesForm()">Save</button></div>'
+    );
+    return;
+  }
   var item = getItems(state.currentCategoryId).find(function(i) { return i.id === itemId; });
   if (!item) return;
   state.pendingImageData = item.image || null;
